@@ -1,0 +1,18 @@
+{
+  "raw_rows": 4559,
+  "exact_duplicate_rows_removed": 1,
+  "structural_holiday_rows": 129,
+  "unexpected_missing_rows": 128,
+  "nonpositive_price_rows": 0,
+  "trading_rows": 4429,
+  "date_range": "2008-05-02 00:00:00 -> 2025-12-31 00:00:00",
+  "required_series": [
+    "MG95",
+    "MG92",
+    "DO_001",
+    "DO_005"
+  ],
+  "publication_timestamp_is_proxy": true,
+  "availability_timestamp_is_proxy": true,
+  "status": "PASSED"
+}

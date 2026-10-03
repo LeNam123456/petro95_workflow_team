@@ -1,0 +1,2 @@
+raw_rows,exact_duplicate_rows_removed,structural_holiday_rows,unexpected_missing_rows,nonpositive_price_rows,trading_rows,date_range,required_series,publication_timestamp_is_proxy,availability_timestamp_is_proxy,status
+4559,1,129,128,0,4429,2008-05-02 00:00:00 -> 2025-12-31 00:00:00,"['MG95', 'MG92', 'DO_001', 'DO_005']",True,True,PASSED

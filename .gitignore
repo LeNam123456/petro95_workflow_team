@@ -1,0 +1,24 @@
+# Exclude Jupyter Notebooks as requested by user
+*.ipynb
+.ipynb_checkpoints/
+
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating System files
+.DS_Store
+Thumbs.db

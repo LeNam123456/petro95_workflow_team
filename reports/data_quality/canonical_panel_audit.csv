@@ -1,0 +1,2 @@
+alignment_mode,platts_trading_rows,brent_trading_rows,canonical_panel_rows,exact_calendar_overlap_rows,holiday_carry_forward_rows,date_range,target_date_range,pit_records_audited,pit_violations,proxy_availability_rows,status
+asof,4429,4476,4428,4262,166,2008-05-02 -> 2025-12-30,2008-05-05 -> 2025-12-31,4428,0,4428,PASSED

@@ -1,0 +1,272 @@
+{
+  "pipeline": "SPAFS_V5.2",
+  "status": "PASSED",
+  "config": {
+    "root": "D:\\Petro_95",
+    "platts_csv": "D:\\Petro_95\\data\\raw\\price_petroleum_platts.csv",
+    "brent_csv": "D:\\Petro_95\\data\\raw\\brent_crude_daily.csv",
+    "news_csv": "D:\\Petro_95\\data\\raw\\gdelt_news_headlines.csv",
+    "interim_dir": "D:\\Petro_95\\data\\interim",
+    "processed_dir": "D:\\Petro_95\\data\\processed",
+    "report_dir": "D:\\Petro_95\\reports\\data_quality",
+    "min_date": "2008-01-01",
+    "max_date": "2025-12-31",
+    "nlp_start_date": "2017-01-01",
+    "train_end_date": "2019-12-31",
+    "oos_start_date": "2020-01-01",
+    "platts_moc_time_sgt": "16:30",
+    "forecast_cutoff_time_sgt": "08:30",
+    "brent_settlement_available_time_sgt": "03:30",
+    "volatility_window": 30,
+    "tri_regime_multiplier": 0.5,
+    "max_return_lag": 3,
+    "outlier_abs_return_pct": 20.0,
+    "require_positive_prices": true,
+    "require_unique_market_date": true,
+    "require_news_for_stream2": false,
+    "expected_raw_platts_rows": null,
+    "expected_trading_rows": null,
+    "expected_synchronized_rows": null,
+    "expected_nlp_rows": null
+  },
+  "row_counts": {
+    "canonical_panel": 4428,
+    "daily_full_features": 4428,
+    "stream1_econometric": 4428,
+    "stream2_aligned_nlp": 2255,
+    "weekly_robustness": 922
+  },
+  "audits": {
+    "gate_1_1_platts": {
+      "raw_rows": 4559,
+      "exact_duplicate_rows_removed": 1,
+      "structural_holiday_rows": 129,
+      "unexpected_missing_rows": 128,
+      "nonpositive_price_rows": 0,
+      "trading_rows": 4429,
+      "date_range": "2008-05-02 00:00:00 -> 2025-12-31 00:00:00",
+      "required_series": [
+        "MG95",
+        "MG92",
+        "DO_001",
+        "DO_005"
+      ],
+      "publication_timestamp_is_proxy": true,
+      "availability_timestamp_is_proxy": true,
+      "status": "PASSED"
+    },
+    "gate_1_2_brent": {
+      "raw_rows": 4476,
+      "exact_duplicate_rows_removed": 0,
+      "trading_rows": 4476,
+      "date_range": "2008-01-02 -> 2025-12-30",
+      "min_close_usd_bbl": 19.33,
+      "max_close_usd_bbl": 146.08,
+      "outlier_threshold_pct": 20.0,
+      "outliers_detected": 2,
+      "outlier_details": [
+        {
+          "market_date": "2020-03-09",
+          "brent_close": 34.36,
+          "log_return_pct": -27.5751,
+          "classification": "GENUINE_MARKET_SHOCK_PRESERVED"
+        },
+        {
+          "market_date": "2020-04-21",
+          "brent_close": 19.33,
+          "log_return_pct": -27.9761,
+          "classification": "GENUINE_MARKET_SHOCK_PRESERVED"
+        }
+      ],
+      "platts_calendar_overlap_days": 4262,
+      "brent_availability_rule": "market_date + 1 day @ 03:30 SGT",
+      "status": "PASSED"
+    },
+    "gate_1_3_canonical": {
+      "alignment_mode": "asof",
+      "platts_trading_rows": 4429,
+      "brent_trading_rows": 4476,
+      "canonical_panel_rows": 4428,
+      "exact_calendar_overlap_rows": 4262,
+      "holiday_carry_forward_rows": 166,
+      "date_range": "2008-05-02 -> 2025-12-30",
+      "target_date_range": "2008-05-05 -> 2025-12-31",
+      "pit_records_audited": 4428,
+      "pit_violations": 0,
+      "proxy_availability_rows": 4428,
+      "status": "PASSED"
+    },
+    "step_07_partition": {
+      "stream1_rows": 4428,
+      "stream1_date_range": "2008-05-02 -> 2025-12-30",
+      "stream2_rows": 2255,
+      "stream2_date_range": "2017-01-03 -> 2025-12-30",
+      "train_rows": 748,
+      "oos_rows": 1507,
+      "num_predictive_features": 37,
+      "zero_news_days_stream2": 2255,
+      "feature_contract": {
+        "feature_columns": [
+          "MG95",
+          "MG92",
+          "DO_001",
+          "DO_005",
+          "brent_close",
+          "brent_return_pct",
+          "brent_return_pos",
+          "brent_return_neg",
+          "brent_outlier_flag",
+          "brent_high",
+          "brent_low",
+          "brent_open",
+          "brent_volume",
+          "brent_observed_date",
+          "brent_calendar_exact_match",
+          "mg95_return_pct",
+          "brent_return_pct_aligned",
+          "spread_mg95_mg92",
+          "spread_mg95_do005",
+          "spread_mg95_brent",
+          "spread_mg95_brent_lag1",
+          "octane_spread_nonpositive_flag",
+          "mg95_return_lag1",
+          "brent_return_lag1",
+          "mg95_return_lag2",
+          "brent_return_lag2",
+          "mg95_return_lag3",
+          "brent_return_lag3",
+          "vol_mg95_30d",
+          "theta_t",
+          "mg95_outlier_flag",
+          "brent_outlier_flag_aligned",
+          "economic_shock_flag",
+          "news_count",
+          "news_sentiment_mean",
+          "news_native_tone_mean",
+          "news_goldstein_mean"
+        ],
+        "target_columns": [
+          "target_direction",
+          "target_direction_tri",
+          "target_market_date",
+          "target_outlier_flag",
+          "target_return_pct"
+        ],
+        "identifier_columns": [
+          "availability_datetime",
+          "availability_datetime_is_proxy",
+          "brent_availability_datetime",
+          "brent_availability_datetime_is_proxy",
+          "forecast_origin_datetime",
+          "market_date",
+          "news_dataset_present",
+          "observation_datetime",
+          "publication_datetime",
+          "publication_datetime_is_proxy",
+          "target_market_date"
+        ],
+        "non_feature_columns": [
+          "availability_datetime",
+          "availability_datetime_is_proxy",
+          "brent_availability_datetime",
+          "brent_availability_datetime_is_proxy",
+          "forecast_origin_datetime",
+          "market_date",
+          "news_dataset_present",
+          "observation_datetime",
+          "publication_datetime",
+          "publication_datetime_is_proxy",
+          "target_direction",
+          "target_direction_tri",
+          "target_market_date",
+          "target_outlier_flag",
+          "target_return_pct"
+        ],
+        "feature_target_overlap": [],
+        "model_feature_whitelists": {
+          "M0a": [],
+          "M0b": [
+            "mg95_return_pct"
+          ],
+          "M1": [
+            "mg95_return_pct",
+            "mg95_return_lag1"
+          ],
+          "M2": [
+            "mg95_return_pct",
+            "mg95_return_lag1",
+            "brent_return_pct_aligned",
+            "brent_return_lag1",
+            "spread_mg95_brent_lag1"
+          ],
+          "M3": [
+            "mg95_return_pct",
+            "mg95_return_lag1",
+            "brent_return_pos",
+            "brent_return_neg",
+            "brent_return_lag1",
+            "spread_mg95_brent_lag1"
+          ],
+          "M4": [
+            "mg95_return_pct",
+            "mg95_return_lag1",
+            "mg95_return_lag2",
+            "mg95_return_lag3",
+            "brent_return_pct_aligned",
+            "brent_return_lag1",
+            "brent_return_lag2",
+            "brent_return_lag3",
+            "vol_mg95_30d",
+            "economic_shock_flag"
+          ],
+          "M5": [
+            "mg95_return_pct",
+            "mg95_return_lag1",
+            "mg95_return_lag2",
+            "mg95_return_lag3",
+            "brent_return_pct_aligned",
+            "brent_return_lag1",
+            "brent_return_lag2",
+            "brent_return_lag3",
+            "vol_mg95_30d",
+            "economic_shock_flag",
+            "spread_mg95_mg92",
+            "spread_mg95_do005",
+            "spread_mg95_brent",
+            "spread_mg95_brent_lag1",
+            "octane_spread_nonpositive_flag"
+          ],
+          "M6": [
+            "mg95_return_pct",
+            "mg95_return_lag1",
+            "mg95_return_lag2",
+            "mg95_return_lag3",
+            "brent_return_pct_aligned",
+            "brent_return_lag1",
+            "brent_return_lag2",
+            "brent_return_lag3",
+            "vol_mg95_30d",
+            "economic_shock_flag",
+            "spread_mg95_mg92",
+            "spread_mg95_do005",
+            "spread_mg95_brent",
+            "spread_mg95_brent_lag1",
+            "octane_spread_nonpositive_flag",
+            "news_count",
+            "news_sentiment_mean",
+            "news_native_tone_mean",
+            "news_goldstein_mean"
+          ]
+        }
+      },
+      "status": "PASSED"
+    },
+    "step_08_weekly": {
+      "daily_input_rows": 4428,
+      "weekly_robustness_rows": 922,
+      "date_range": "2008-05-02 -> 2025-12-26",
+      "target_date_range": "2008-05-09 -> 2025-12-30",
+      "status": "PASSED"
+    }
+  }
+}

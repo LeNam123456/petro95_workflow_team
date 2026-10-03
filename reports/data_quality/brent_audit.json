@@ -1,0 +1,27 @@
+{
+  "raw_rows": 4476,
+  "exact_duplicate_rows_removed": 0,
+  "trading_rows": 4476,
+  "date_range": "2008-01-02 -> 2025-12-30",
+  "min_close_usd_bbl": 19.33,
+  "max_close_usd_bbl": 146.08,
+  "outlier_threshold_pct": 20.0,
+  "outliers_detected": 2,
+  "outlier_details": [
+    {
+      "market_date": "2020-03-09",
+      "brent_close": 34.36,
+      "log_return_pct": -27.5751,
+      "classification": "GENUINE_MARKET_SHOCK_PRESERVED"
+    },
+    {
+      "market_date": "2020-04-21",
+      "brent_close": 19.33,
+      "log_return_pct": -27.9761,
+      "classification": "GENUINE_MARKET_SHOCK_PRESERVED"
+    }
+  ],
+  "platts_calendar_overlap_days": 4262,
+  "brent_availability_rule": "market_date + 1 day @ 03:30 SGT",
+  "status": "PASSED"
+}

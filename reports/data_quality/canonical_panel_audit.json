@@ -1,0 +1,14 @@
+{
+  "alignment_mode": "asof",
+  "platts_trading_rows": 4429,
+  "brent_trading_rows": 4476,
+  "canonical_panel_rows": 4428,
+  "exact_calendar_overlap_rows": 4262,
+  "holiday_carry_forward_rows": 166,
+  "date_range": "2008-05-02 -> 2025-12-30",
+  "target_date_range": "2008-05-05 -> 2025-12-31",
+  "pit_records_audited": 4428,
+  "pit_violations": 0,
+  "proxy_availability_rows": 4428,
+  "status": "PASSED"
+}

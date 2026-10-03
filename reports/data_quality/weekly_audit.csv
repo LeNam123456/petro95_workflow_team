@@ -1,0 +1,2 @@
+daily_input_rows,weekly_robustness_rows,date_range,target_date_range,status
+4428,922,2008-05-02 -> 2025-12-26,2008-05-09 -> 2025-12-30,PASSED

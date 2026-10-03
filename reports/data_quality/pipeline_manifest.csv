@@ -1,0 +1,2 @@
+pipeline,status,canonical_rows,stream1_rows,stream2_rows,weekly_rows
+SPAFS_V5.2,PASSED,4428,4428,2255,922
