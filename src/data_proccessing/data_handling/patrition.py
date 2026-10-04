@@ -9,15 +9,18 @@ research streams in accordance with Section 3 of the SPAFS V5.2 Blueprint:
      and baseline econometric models M0 to M3.
    - Preserves major structural regimes: 2008 Global Financial Crisis, 2014–2016
      oil crash, and 2020 COVID-19 pandemic shock.
+
 2. Stream 2 (Aligned NLP & Machine Learning Subsample 2017–2025):
    - Scope: 9-year aligned observation window (from 2017-01-01 onwards).
    - Purpose: Dedicated to RQ2 (Clark-West incremental predictive ability tests)
      and multi-seed LightGBM machine learning models M4 to M6.
    - Eliminates "Zero Ambiguity" bias (ensuring lack of news prior to 2017 does not
      distort machine learning feature attribution).
+
 3. Out-of-Sample Partitioning of Stream 2:
    - In-sample Training: 2017–2019 (target dates <= 2019-12-31).
    - Out-of-Sample (OOS) Testing: 2020–2025 (target dates >= 2020-01-01).
+   
 4. Feature Governance & Leakage Prevention:
    Enforces strict feature contracts ensuring zero overlap between model features
    and target/identifier metadata.
