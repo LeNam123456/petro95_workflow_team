@@ -39,7 +39,7 @@ from typing import Any
 
 import pandas as pd
 
-from .config import Config, ensure_directories
+from .config import Config, build_config, ensure_directories
 from .data_handling.alignment import build_canonical_panel
 from .data_handling.market_features import build_market_features
 from .data_handling.news_pit import aggregate_news_pit
@@ -162,3 +162,44 @@ def run_pipeline(cfg: Config) -> dict[str, Any]:
     logger.info("SPAFS V5.2 PIPELINE EXECUTION COMPLETED SUCCESSFULLY (ALL GATES PASSED)")
     logger.info("==================================================================")
     return manifest
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+    from pathlib import Path
+
+    # Guarantee project root is in sys.path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    parser = argparse.ArgumentParser(description="Execute SPAFS V5.2 Data Preparation Pipeline.")
+    parser.add_argument(
+        "--mode",
+        choices=["market-only", "multimodal"],
+        default="market-only",
+        help="Pipeline execution mode (default: market-only).",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable DEBUG level logging output.",
+    )
+
+    args = parser.parse_args()
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    from dataclasses import replace
+
+    require_news = args.mode == "multimodal"
+    base_cfg = build_config(project_root)
+    config = replace(base_cfg, require_news_for_stream2=require_news)
+    ensure_directories(config)
+
+    run_pipeline(config)
