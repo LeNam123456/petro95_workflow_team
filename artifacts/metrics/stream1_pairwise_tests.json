@@ -1,0 +1,54 @@
+[
+  {
+    "candidate_id": "M1",
+    "benchmark_id": "M0a",
+    "hypothesis": "H0: ARMA(1,1) M1 does not outperform Naive Zero Return M0a in OOS loss differential.",
+    "dm_hln_stat": 0.8357254232598461,
+    "dm_p_value": 0.798237280082717,
+    "dm_reject_005": false,
+    "dm_mean_loss_diff": 0.0007571347568380784,
+    "cw_stat": -0.7808314720809811,
+    "cw_p_value": 0.7825491894668419,
+    "cw_reject_005": false,
+    "cw_adjusted_loss_diff": -0.0007068835261305244
+  },
+  {
+    "candidate_id": "M2",
+    "benchmark_id": "M1",
+    "hypothesis": "H0: Symmetric Dynamic M2 does not outperform Univariate ARMA M1 in OOS loss differential.",
+    "dm_hln_stat": -7.005922387248052,
+    "dm_p_value": 2.3624343970236286e-12,
+    "dm_reject_005": true,
+    "dm_mean_loss_diff": -1.5941290851243175,
+    "cw_stat": 10.632890465133212,
+    "cw_p_value": 0.0,
+    "cw_reject_005": true,
+    "cw_adjusted_loss_diff": 3.23823585472678
+  },
+  {
+    "candidate_id": "M3",
+    "benchmark_id": "M2",
+    "hypothesis": "H0 (RQ1 Joint): M3 collapses to M2 (beta_0+ = beta_0- and beta_1+ = beta_1-).",
+    "dm_hln_stat": 0.5824082203581841,
+    "dm_p_value": 0.7197830849913183,
+    "dm_reject_005": false,
+    "dm_mean_loss_diff": 0.004336773535129595,
+    "cw_stat": -0.3767550677309958,
+    "cw_p_value": 0.6468221824961732,
+    "cw_reject_005": false,
+    "cw_adjusted_loss_diff": -0.002787726609583424
+  },
+  {
+    "candidate_id": "M3",
+    "benchmark_id": "M2",
+    "hypothesis": "H0: Asymmetric ADL M3 does not improve OOS forecast accuracy over Symmetric M2.",
+    "dm_hln_stat": 0.5824082203581841,
+    "dm_p_value": 0.7197830849913183,
+    "dm_reject_005": false,
+    "dm_mean_loss_diff": 0.004336773535129595,
+    "cw_stat": -0.3767550677309958,
+    "cw_p_value": 0.6468221824961732,
+    "cw_reject_005": false,
+    "cw_adjusted_loss_diff": -0.002787726609583424
+  }
+]

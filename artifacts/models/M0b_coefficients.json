@@ -1,0 +1,7 @@
+{
+  "model_id": "M0b",
+  "name": "Naive Directional Momentum",
+  "num_parameters": 0,
+  "sample_size": 4425,
+  "rule": "Directional persistence: y\u0302_{t+1} = sign(r_{MG95, t})"
+}

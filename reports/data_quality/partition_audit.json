@@ -5,7 +5,7 @@
   "stream2_date_range": "2017-01-03 -> 2025-12-30",
   "train_rows": 748,
   "oos_rows": 1507,
-  "num_predictive_features": 37,
+  "num_predictive_features": 39,
   "zero_news_days_stream2": 2255,
   "feature_contract": {
     "feature_columns": [
@@ -39,6 +39,8 @@
       "brent_return_lag3",
       "vol_mg95_30d",
       "theta_t",
+      "brent_return_pos_lag1",
+      "brent_return_neg_lag1",
       "mg95_outlier_flag",
       "brent_outlier_flag_aligned",
       "economic_shock_flag",
@@ -91,8 +93,7 @@
         "mg95_return_pct"
       ],
       "M1": [
-        "mg95_return_pct",
-        "mg95_return_lag1"
+        "mg95_return_pct"
       ],
       "M2": [
         "mg95_return_pct",
@@ -106,7 +107,8 @@
         "mg95_return_lag1",
         "brent_return_pos",
         "brent_return_neg",
-        "brent_return_lag1",
+        "brent_return_pos_lag1",
+        "brent_return_neg_lag1",
         "spread_mg95_brent_lag1"
       ],
       "M4": [

@@ -1,0 +1,35 @@
+{
+  "h0_contemporaneous": {
+    "hypothesis": "H0^(1): beta_0+ = beta_0- (Contemporaneous symmetry)",
+    "beta_pos_0": 0.6703535016096539,
+    "beta_neg_0": 0.674066238922842,
+    "diff": -0.003712737313188108,
+    "wald_f_stat": 0.0034736042710440534,
+    "wald_chi2_stat": 0.0034736042710440534,
+    "df": 1,
+    "p_value": 0.9530020557350813,
+    "reject_h0_at_005": false,
+    "economic_interpretation": "Do not reject H0: Wholesale gasoline prices adjust symmetrically to crude shocks within 24h."
+  },
+  "h0_cumulative": {
+    "hypothesis": "H0^(2): sum(beta+) = sum(beta-) (Cumulative 2-day symmetry)",
+    "sum_beta_pos": 0.7933866746345342,
+    "sum_beta_neg": 0.7417249154189075,
+    "diff": 0.05166175921562666,
+    "wald_f_stat": 0.223958041540265,
+    "wald_chi2_stat": 0.223958041540265,
+    "df": 1,
+    "p_value": 0.636040497973399,
+    "reject_h0_at_005": false,
+    "economic_interpretation": "Do not reject H0: Cumulative transmission of crude shocks is symmetric across a 2-day window."
+  },
+  "h0_joint_nested": {
+    "hypothesis": "H0^(joint): beta_0+ = beta_0- AND beta_1+ = beta_1- (M3 nests M2)",
+    "wald_f_stat": 0.24807748866343693,
+    "wald_chi2_stat": 0.49615497732687386,
+    "df": 2,
+    "p_value": 0.8833456155841848,
+    "reject_h0_at_005": false,
+    "economic_interpretation": "Do not reject H0: Linear dynamic model M2 is an adequate representation; asymmetry is not supported."
+  }
+}

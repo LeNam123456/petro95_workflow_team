@@ -214,6 +214,8 @@ def add_volatility_and_regime(
     # Asymmetric shock branches for RQ1 Asymmetric Distributed Lag (ADL)
     out["brent_return_pos"] = out["brent_return_pct_aligned"].clip(lower=0.0)
     out["brent_return_neg"] = out["brent_return_pct_aligned"].clip(upper=0.0)
+    out["brent_return_pos_lag1"] = out["brent_return_pos"].shift(1)
+    out["brent_return_neg_lag1"] = out["brent_return_neg"].shift(1)
 
     # Dynamic three-regime target formulation
     tri = pd.Series(pd.NA, index=out.index, dtype="Int64")

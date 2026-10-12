@@ -1,0 +1,8 @@
+{
+  "model_id": "M0a",
+  "name": "Naive Zero Return (Random Walk / EMH)",
+  "num_parameters": 0,
+  "constant": 0.0,
+  "sample_size": 4425,
+  "hypothesis": "Efficient Market Hypothesis (EMH): E[r_{t+1}] = 0"
+}
