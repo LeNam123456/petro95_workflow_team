@@ -1,0 +1,50 @@
+{
+  "execution_timestamp_utc": "2026-10-12T09:55:02.059993+00:00",
+  "stream_name": "stream2_ml_m4",
+  "models_executed": [
+    "M4"
+  ],
+  "dataset": {
+    "path": "data\\processed\\stream2_aligned_nlp_2017_2025.parquet",
+    "sha256": "c7672f30d72b0266d59e7a8e163afd2879fee151499ad8e0b45b2de36df9613a"
+  },
+  "artifacts_generated": {
+    "manifests\\.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "metrics\\.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "metrics\\multicollinearity_diagnostics.json": "47abf40b7adc15f61bc3b90248f6070bd8919b06ee5ca5ec5efdd0b7d6f9d1d5",
+    "metrics\\residual_diagnostics.json": "446eb26ab88c8f3ac307246dc9319c8a30bfdf8684718b614ae704e83067c530",
+    "metrics\\rq1_wald_tests.json": "4b2125bb9b74ffa40c94b0913ba4fda1004648a406edbd5ae4633df34b605810",
+    "metrics\\stream1_econometric_leaderboard.csv": "7cd008443749f6dd4aaebd69afeca826e8b8eb2dcbfd5bb9a9b1f1b57a240aff",
+    "metrics\\stream1_econometric_leaderboard.json": "02bd3fac5bb76db4ffb43e23f27ed18f78a5fac69f5fced219cadb2d46a8f506",
+    "metrics\\stream1_pairwise_tests.json": "e7045317a197ed31ca4998185984e325fd9b0fd4d2b7624b75ebaffe9aac9e9f",
+    "metrics\\stream2_m4_leaderboard.json": "b12a76a51e990e36e9168e0bbffd4b50202ec54406ffecf2ea9fb7d27be4d098",
+    "models\\.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "models\\M0a.joblib": "fc5cdb235fe11294ddefa72a94ac879de6b6ae9ee28c27fcc2e6aeb8dd95d69e",
+    "models\\M0a_coefficients.json": "71cf63774d225612adab60bc442777a3f9d64c3e35dcfcb618c3adc08e5770dc",
+    "models\\M0a_naive_zero.joblib": "55555ab4134495b0cfd7efc485c2eef7aedcc7a86d67d8043d62847a0c819e64",
+    "models\\M0b.joblib": "df4f9b66b4f55c488495a38e157bd04c737f3f725009dd8f9ca65e69ba6a6276",
+    "models\\M0b_coefficients.json": "1efd6dbafe30ca066c673a6d526811493efd344a2d80b860286593b4485e3f82",
+    "models\\M0b_naive_direction.joblib": "c93bc1101f2aab86317b8fe25367d9c23656b630e9b5ccff9dde3860174eb8a9",
+    "models\\M1.joblib": "77011f1cae4b4511abb0a35a078a998a19608dfe18332928eca3b0530abf2b91",
+    "models\\M1_arma.joblib": "526e121bc668113e4815796684e94b179a8514efa710ff7c3d18704a3806c4a4",
+    "models\\M1_coefficients.json": "c7a57a69c64f88456787f35a03c09e65be815c6c9405cbad8b07afda96ed2e9e",
+    "models\\M2.joblib": "58b6d241b0894d68533acacb412698adfcc17c3f1896767eaa00f281505cc7a5",
+    "models\\M2_coefficients.json": "5abce0c4b6f9374ecdf88ca9e1ccfad7b6fd6d2852a9e93305457826e63cd06e",
+    "models\\M3.joblib": "a952f60cc2ff7617cfef84eb043c2a05fcffefec0f44f0148ea3fa5921484270",
+    "models\\M3_coefficients.json": "7f0f625ee7598f76ee51a246292d088558eba0472e2d94e937e5147744482183",
+    "models\\M4.joblib": "710543d40e629267fd9fdd1bcba5d27760b8fb4917dd1acd01178759d2921301",
+    "models\\M4_coefficients.json": "196a8d4539224b08f5c2e0998bd900088c1a6b7b07de05c97416ed46a4dee3b4",
+    "predictions\\.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "predictions\\pred_M0a_stream1.parquet": "03f86b03251d75d89ed71fd57c7b8dbbe1c48a95cddc1ff9b3f0848c3cb6a850",
+    "predictions\\pred_M0b_stream1.parquet": "5a5437d27e7e98e4c79b697af0d746878b6d7943aa0c117fcbdd5f018362fd06",
+    "predictions\\pred_M1_stream1.parquet": "e0de1a36d5c93fcc0704a8c11530d1984423f9090b58f559e3c581613c473d7a",
+    "predictions\\pred_M2_stream1.parquet": "887b67a0dd6c87ebe8dba76d44ade6ff176a07f64d10ed821a284d90910a5c69",
+    "predictions\\pred_M3_stream1.parquet": "724d58d51d14bf3ed1a3463823c0224b4a755e2b04789ef006b609527354da2f",
+    "predictions\\pred_M4_stream2.parquet": "e281bde9a35e6d371c2e45a91ba7fff6af9cc1d297074dfab8f7c41c2c793016"
+  },
+  "metadata": {
+    "initial_window": 1500,
+    "refit_every": 20,
+    "n_oos_evaluations": 754
+  }
+}
