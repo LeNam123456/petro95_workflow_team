@@ -1,0 +1,33 @@
+{
+  "audit_version": "SPAFS V5.2 Upgraded PIT Audit (Strict Accounting)",
+  "dataset_path": "data/processed/stream2_aligned_nlp_2017_2025.parquet",
+  "total_records_audited": 2255,
+  "date_range": "2017-01-03 to 2025-12-30",
+  "source_data_verification": {
+    "verified_source_calendar_dates": 2255,
+    "verified_brent_observed_dates": 2255,
+    "calendar_exact_match_ratio_pct": 97.47228381374723,
+    "target_dates_strictly_future_count": 2255,
+    "target_dates_strictly_future_pct": 100.0
+  },
+  "proxy_vs_realtime_timestamp_accounting": {
+    "publication_datetime_proxy_count": 2255,
+    "publication_datetime_proxy_pct": 100.0,
+    "availability_datetime_proxy_count": 2255,
+    "availability_datetime_proxy_pct": 100.0,
+    "brent_availability_datetime_proxy_count": 2255,
+    "brent_availability_datetime_proxy_pct": 100.0,
+    "verified_realtime_streaming_arrival_ticks": 0,
+    "transparent_caveat": "Historical daily end-of-day series utilize rule-based market convention proxy timestamps (Platts close 16:30 SGT, ICE Brent settlement 03:30 SGT, Forecast cutoff 08:30 SGT). Real-time physical feed server arrival tick logs are not available for historical EOD data."
+  },
+  "temporal_invariants": {
+    "obs_lt_cutoff_count": 2255,
+    "platts_avail_le_cutoff_count": 2255,
+    "brent_avail_le_cutoff_count": 2255,
+    "cutoff_lt_target_close_count": 2255,
+    "median_brent_buffer_hours": 5.0,
+    "median_lead_time_hours": 8.0,
+    "total_temporal_rule_violations": 0,
+    "temporal_rules_satisfied": true
+  }
+}

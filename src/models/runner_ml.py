@@ -1,21 +1,24 @@
-"""CLI Runner for Machine Learning Model (M4 Technical LightGBM) in SPAFS V5.2.
+"""CLI Runner for Machine Learning Models (M4 Technical LightGBM, M5 Economic LightGBM) in SPAFS V5.2.
 
 Executes:
 - Branch A: Full-sample model estimation, multi-seed ensemble aggregation,
   feature importance extraction (Gain & Split), and artifact persistence.
 - Branch B: Expanding Walk-Forward 1-step-ahead validation generating true OOS predictions,
-  regression metrics, directional metrics, and cryptographic SHA-256 manifests.
+  regression metrics, directional metrics, pairwise statistical tests (Diebold-Mariano HLN 1997,
+  Clark-West 2007), and cryptographic SHA-256 manifests.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+import numpy as np
 import pandas as pd
 
 # Ensure project root is in sys.path
@@ -24,11 +27,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data_proccessing.model_schemas import extract_model_matrix
+from src.models.base import BaseForecastingModel
 from src.models.evaluation.metrics import (
     compute_directional_metrics,
     compute_regression_metrics,
 )
-from src.models.ml.lgbm import TechnicalLGBMModel
+from src.models.evaluation.pairwise import clark_west_test, diebold_mariano_test
+from src.models.ml.lgbm import EconomicLGBMModel, TechnicalLGBMModel
 from src.models.persistence import ArtifactManager
 from src.models.validation.walk_forward import run_walk_forward_evaluation
 
@@ -41,16 +46,28 @@ logging.basicConfig(
 logger = logging.getLogger("SPAFS_V5.2.MLRunner")
 
 
-def run_stream2_m4_pipeline(
+def _get_model_factory(model_id: str) -> tuple[Callable[[], BaseForecastingModel], str]:
+    """Return model instantiation factory and description for given model ID."""
+    if model_id == "M4":
+        return lambda: TechnicalLGBMModel(), "Technical LightGBM (Momentum & Volatility)"
+    elif model_id == "M5":
+        return lambda: EconomicLGBMModel(), "Economic LightGBM (Refining Economics Benchmark)"
+    else:
+        raise ValueError(f"Unsupported ML model ID: {model_id}. Expected 'M4' or 'M5'.")
+
+
+def run_stream2_ml_pipeline(
+    models: list[str] | tuple[str, ...] = ("M4", "M5"),
     data_path: str = "data/processed/stream2_aligned_nlp_2017_2025.parquet",
     walk_forward: bool = True,
     initial_window: int = 1500,
     refit_every: int = 20,
     artifacts_dir: str = "artifacts",
 ) -> None:
-    """Execute machine learning pipeline for M4 Technical LightGBM on Stream 2.
+    """Execute complete machine learning pipeline for Stream 2 models (M4, M5).
 
     Args:
+        models: List of model IDs to execute (e.g. ['M4'], ['M5'], or ['M4', 'M5']).
         data_path: Path to Stream 2 Parquet dataset.
         walk_forward: If True, execute Branch B walk-forward out-of-sample evaluation.
         initial_window: Initial warmup observation count for expanding walk-forward.
@@ -58,7 +75,7 @@ def run_stream2_m4_pipeline(
         artifacts_dir: Target directory for artifacts.
     """
     logger.info("================================================================================")
-    logger.info("           SPAFS V5.2: STREAM 2 MACHINE LEARNING PIPELINE (M4)                  ")
+    logger.info("           SPAFS V5.2: STREAM 2 MACHINE LEARNING PIPELINE (%s)                  ", ", ".join(models))
     logger.info("================================================================================")
     start_total = time.time()
     artifact_mgr = ArtifactManager(base_dir=artifacts_dir)
@@ -79,98 +96,231 @@ def run_stream2_m4_pipeline(
         df_stream2["market_date"].max().date(),
     )
 
-    # 2. Extract M4 Matrix
-    mat_m4 = extract_model_matrix(df_stream2, "M4")
-    logger.info("Extracted M4 matrix: %d observations, %d features: %s", len(mat_m4.y), len(mat_m4.spec.features), list(mat_m4.spec.features))
+    executed_models = []
+    leaderboard_records = []
+    predictions_map: dict[str, pd.DataFrame] = {}
 
-    # =========================================================================
-    # BRANCH A: FULL-SAMPLE ESTIMATION & FEATURE IMPORTANCE PERSISTENCE
-    # =========================================================================
-    logger.info("--------------------------------------------------------------------------------")
-    logger.info("[BRANCH A] Full-Sample Model Estimation & Multi-Seed Ensemble (N=%d)", len(mat_m4.y))
-    logger.info("--------------------------------------------------------------------------------")
+    # Try loading existing predictions if evaluating a single model
+    for mid in ("M4", "M5"):
+        pred_path = artifact_mgr.predictions_dir / f"pred_{mid}_stream2.parquet"
+        if pred_path.exists():
+            try:
+                predictions_map[mid] = pd.read_parquet(pred_path)
+            except Exception as e:
+                logger.warning("Could not read cached predictions for %s: %s", mid, e)
 
-    m4 = TechnicalLGBMModel()
-    m4.fit(mat_m4.X, mat_m4.y)
-    artifact_mgr.save_model(m4)
-    artifact_mgr.save_coefficients(m4)
+    # Run each requested model
+    for model_id in models:
+        model_id = model_id.upper()
+        factory, model_name = _get_model_factory(model_id)
 
-    logger.info("M4 Top 5 Features (Gain Importance):")
-    for feat, gain in list(m4.feature_importances_gain_.items())[:5]:
-        logger.info("  - %-25s: %.4f", feat, gain)
-
-    if not walk_forward:
-        logger.info("Walk-forward evaluation skipped. Branch A complete.")
-        artifact_mgr.create_manifest(
-            stream_name="stream2_ml_m4",
-            models_executed=["M4"],
-            data_path=path,
-            extra_meta={"branch_b_walk_forward": False},
+        # 2. Extract whitelisted feature matrix
+        mat = extract_model_matrix(df_stream2, model_id)
+        logger.info(
+            "Extracted %s matrix: %d observations, %d features: %s",
+            model_id,
+            len(mat.y),
+            len(mat.spec.features),
+            list(mat.spec.features),
         )
-        return
+
+        # =========================================================================
+        # BRANCH A: FULL-SAMPLE ESTIMATION & FEATURE IMPORTANCE PERSISTENCE
+        # =========================================================================
+        logger.info("--------------------------------------------------------------------------------")
+        logger.info("[BRANCH A] Full-Sample Model Estimation & Multi-Seed Ensemble for %s (N=%d)", model_id, len(mat.y))
+        logger.info("--------------------------------------------------------------------------------")
+
+        model_inst = factory()
+        model_inst.fit(mat.X, mat.y)
+        artifact_mgr.save_model(model_inst)
+        artifact_mgr.save_coefficients(model_inst)
+
+        logger.info("%s Top 5 Features (Gain Importance):", model_id)
+        for feat, gain in list(model_inst.feature_importances_gain_.items())[:5]:
+            logger.info("  - %-30s: %.4f", feat, gain)
+
+        if not walk_forward:
+            logger.info("Walk-forward evaluation skipped for %s.", model_id)
+            executed_models.append(model_id)
+            continue
+
+        # =========================================================================
+        # BRANCH B: EXPANDING WALK-FORWARD VALIDATION
+        # =========================================================================
+        logger.info("--------------------------------------------------------------------------------")
+        logger.info("[BRANCH B] Expanding Walk-Forward OOS Forecasting for %s (Warmup=%d, Refit=%d)", model_id, initial_window, refit_every)
+        logger.info("--------------------------------------------------------------------------------")
+
+        wf_res = run_walk_forward_evaluation(
+            model_factory=factory,
+            X=mat.X,
+            y=mat.y,
+            initial_train_size=initial_window,
+            refit_every=refit_every,
+        )
+        artifact_mgr.save_predictions(wf_res.predictions_df, model_id=model_id, tag="stream2")
+        predictions_map[model_id] = wf_res.predictions_df
+
+        pred_df = wf_res.predictions_df
+        reg_metrics = compute_regression_metrics(
+            y_true=pred_df["actual_return"],
+            y_pred=pred_df["predicted_return"],
+        )
+        dir_metrics = compute_directional_metrics(
+            y_true_dir=pred_df["actual_direction"],
+            y_pred_dir=pred_df["predicted_direction"],
+        )
+
+        m_metrics = {
+            "model_id": model_id,
+            "name": model_name,
+            "n_oos": len(pred_df),
+            "rmse": float(reg_metrics["rmse"]),
+            "mae": float(reg_metrics["mae"]),
+            "r2_in_sample": float(reg_metrics["r2"]),
+            "directional_accuracy": float(dir_metrics["directional_accuracy"]),
+            "mcc": float(dir_metrics["mcc"]),
+            "pt_stat": float(dir_metrics["pt_stat"]),
+            "pt_p_value": float(dir_metrics["pt_p_value"]),
+        }
+        leaderboard_records.append(m_metrics)
+        executed_models.append(model_id)
 
     # =========================================================================
-    # BRANCH B: EXPANDING WALK-FORWARD VALIDATION
+    # PAIRWISE STATISTICAL COMPARISON: M5 vs M4
     # =========================================================================
-    logger.info("--------------------------------------------------------------------------------")
-    logger.info("[BRANCH B] Expanding Walk-Forward Out-of-Sample Forecasting (Warmup=%d, Refit=%d)", initial_window, refit_every)
-    logger.info("--------------------------------------------------------------------------------")
+    pairwise_results: list[dict[str, Any]] = []
+    if "M4" in predictions_map and "M5" in predictions_map:
+        logger.info("--------------------------------------------------------------------------------")
+        logger.info("[PAIRWISE TESTING] Formal Comparison: Candidate M5 vs Benchmark M4")
+        logger.info("--------------------------------------------------------------------------------")
 
-    wf_res = run_walk_forward_evaluation(
-        model_factory=lambda: TechnicalLGBMModel(),
-        X=mat_m4.X,
-        y=mat_m4.y,
-        initial_train_size=initial_window,
-        refit_every=refit_every,
-    )
-    artifact_mgr.save_predictions(wf_res.predictions_df, model_id="M4", tag="stream2")
+        pred_m4 = predictions_map["M4"]
+        pred_m5 = predictions_map["M5"]
 
-    pred_df = wf_res.predictions_df
-    reg_metrics = compute_regression_metrics(
-        y_true=pred_df["actual_return"],
-        y_pred=pred_df["predicted_return"],
-    )
-    dir_metrics = compute_directional_metrics(
-        y_true_dir=pred_df["actual_direction"],
-        y_pred_dir=pred_df["predicted_direction"],
-    )
+        common_idx = pred_m5.index.intersection(pred_m4.index)
+        if len(common_idx) > 0:
+            df_m4_common = pred_m4.loc[common_idx]
+            df_m5_common = pred_m5.loc[common_idx]
 
-    m4_metrics = {
-        "model_id": "M4",
-        "n_oos": len(pred_df),
-        "rmse": reg_metrics["rmse"],
-        "mae": reg_metrics["mae"],
-        "r2_in_sample": reg_metrics["r2"],
-        "directional_accuracy": dir_metrics["directional_accuracy"],
-        "mcc": dir_metrics["mcc"],
-        "pt_stat": dir_metrics["pt_stat"],
-        "pt_p_value": dir_metrics["pt_p_value"],
-    }
+            e_cand = df_m5_common["actual_return"] - df_m5_common["predicted_return"]
+            e_bench = df_m4_common["actual_return"] - df_m4_common["predicted_return"]
 
-    artifact_mgr.save_metrics([m4_metrics], filename="stream2_m4_leaderboard.json")
+            # Diebold-Mariano (HLN 1997) with Squared Error Loss (MSE)
+            dm_sq = diebold_mariano_test(
+                e_candidate=e_cand,
+                e_benchmark=e_bench,
+                loss="squared",
+                h=1,
+                small_sample_correction=True,
+                candidate_id="M5",
+                benchmark_id="M4",
+            )
 
-    # Generate Manifest
+            # Diebold-Mariano (HLN 1997) with Absolute Error Loss (MAE)
+            dm_abs = diebold_mariano_test(
+                e_candidate=e_cand,
+                e_benchmark=e_bench,
+                loss="absolute",
+                h=1,
+                small_sample_correction=True,
+                candidate_id="M5",
+                benchmark_id="M4",
+            )
+
+            # Clark-West (2007) nested model test
+            cw = clark_west_test(
+                y_true=df_m5_common["actual_return"],
+                y_pred_small=df_m4_common["predicted_return"],
+                y_pred_large=df_m5_common["predicted_return"],
+                candidate_id="M5",
+                benchmark_id="M4",
+            )
+
+            pw_record = {
+                "candidate_id": "M5",
+                "benchmark_id": "M4",
+                "hypothesis": "H0: Refining spreads (M5) do not reduce OOS forecast error over technical momentum (M4).",
+                "n_obs": len(common_idx),
+                "dm_squared_hln_stat": dm_sq.test_statistic,
+                "dm_squared_p_value": dm_sq.p_value,
+                "dm_squared_reject_005": dm_sq.reject_h0_at_005,
+                "dm_squared_loss_diff_mean": dm_sq.loss_differential_mean,
+                "dm_absolute_hln_stat": dm_abs.test_statistic,
+                "dm_absolute_p_value": dm_abs.p_value,
+                "dm_absolute_reject_005": dm_abs.reject_h0_at_005,
+                "dm_absolute_loss_diff_mean": dm_abs.loss_differential_mean,
+                "cw_stat": cw.test_statistic,
+                "cw_p_value": cw.p_value,
+                "cw_reject_005": cw.reject_h0_at_005,
+                "cw_adjusted_loss_diff": cw.loss_differential_mean,
+            }
+            pairwise_results.append(pw_record)
+            artifact_mgr.save_metrics(pairwise_results, filename="stream2_pairwise_tests.json")
+
+            logger.info("DM Test (Squared Loss): stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
+                        dm_sq.test_statistic, dm_sq.p_value, dm_sq.reject_h0_at_005)
+            logger.info("DM Test (Absolute Loss): stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
+                        dm_abs.test_statistic, dm_abs.p_value, dm_abs.reject_h0_at_005)
+            logger.info("Clark-West Test: stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
+                        cw.test_statistic, cw.p_value, cw.reject_h0_at_005)
+        else:
+            logger.warning("No overlapping evaluation indices between M4 and M5 for pairwise testing.")
+
+    # =========================================================================
+    # LEADERBOARD CONSOLIDATION
+    # =========================================================================
+    if leaderboard_records:
+        # Load any existing leaderboard records to avoid overwriting un-run models
+        existing_board_path = artifact_mgr.metrics_dir / "stream2_ml_leaderboard.json"
+        all_records_map = {}
+        if existing_board_path.exists():
+            try:
+                with open(existing_board_path, "r", encoding="utf-8") as f:
+                    for rec in json.load(f):
+                        all_records_map[rec["model_id"]] = rec
+            except Exception:
+                pass
+
+        for rec in leaderboard_records:
+            all_records_map[rec["model_id"]] = rec
+
+        consolidated_leaderboard = list(all_records_map.values())
+        artifact_mgr.save_metrics(consolidated_leaderboard, filename="stream2_ml_leaderboard.json")
+
+        df_leaderboard = pd.DataFrame(consolidated_leaderboard)
+        artifact_mgr.save_leaderboard(df_leaderboard, filename="stream2_ml_leaderboard.csv")
+
+        print("\n" + "=" * 90)
+        print("                 SPAFS V5.2 - STREAM 2 ML LEADERBOARD")
+        print("=" * 90)
+        print(df_leaderboard[["model_id", "n_oos", "rmse", "mae", "directional_accuracy", "mcc", "pt_stat"]].to_string(index=False))
+        print("=" * 90)
+
+    # Manifest creation
+    manifest_name = f"stream2_ml_{'_'.join(m.lower() for m in executed_models)}"
     artifact_mgr.create_manifest(
-        stream_name="stream2_ml_m4",
-        models_executed=["M4"],
+        stream_name=manifest_name,
+        models_executed=executed_models,
         data_path=path,
         extra_meta={
             "initial_window": initial_window,
             "refit_every": refit_every,
-            "n_oos_evaluations": len(pred_df),
+            "models": executed_models,
         },
     )
-
-    print("\n" + "=" * 80)
-    print("           SPAFS V5.2 - STREAM 2 ML EVALUATION (M4)")
-    print("=" * 80)
-    print(pd.DataFrame([m4_metrics]).to_string(index=False))
-    print("=" * 80)
-    logger.info("ML pipeline finished successfully in %.2f seconds.", time.time() - start_total)
+    logger.info("Pipeline completed successfully in %.2f seconds.", time.time() - start_total)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SPAFS V5.2 ML Runner (M4 Technical LightGBM)")
+    parser = argparse.ArgumentParser(description="SPAFS V5.2 Machine Learning Runner (M4, M5)")
+    parser.add_argument(
+        "--model",
+        choices=["M4", "M5", "all"],
+        default="M5",
+        help="Model ID to execute (M4, M5, or all)",
+    )
     parser.add_argument(
         "--data-path",
         default="data/processed/stream2_aligned_nlp_2017_2025.parquet",
@@ -180,7 +330,7 @@ def main():
         "--initial-window",
         type=int,
         default=1500,
-        help="Initial training warmup size for Walk-Forward",
+        help="Initial training warmup size for Walk-Forward (default: 1500)",
     )
     parser.add_argument(
         "--refit-every",
@@ -200,7 +350,10 @@ def main():
     )
     args = parser.parse_args()
 
-    run_stream2_m4_pipeline(
+    models_to_run = ["M4", "M5"] if args.model == "all" else [args.model]
+
+    run_stream2_ml_pipeline(
+        models=models_to_run,
         data_path=args.data_path,
         walk_forward=not args.skip_walk_forward,
         initial_window=args.initial_window,

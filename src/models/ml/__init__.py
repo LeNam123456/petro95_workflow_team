@@ -2,8 +2,9 @@
 
 Provides:
 - TechnicalLGBMModel (M4)
+- EconomicLGBMModel (M5)
 """
 
-from .lgbm import TechnicalLGBMModel
+from .lgbm import EconomicLGBMModel, TechnicalLGBMModel
 
-__all__ = ["TechnicalLGBMModel"]
+__all__ = ["TechnicalLGBMModel", "EconomicLGBMModel"]
