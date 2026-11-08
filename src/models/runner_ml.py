@@ -28,11 +28,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.data_proccessing.model_schemas import extract_model_matrix
 from src.models.base import BaseForecastingModel
-from src.models.evaluation.metrics import (
-    compute_directional_metrics,
-    compute_regression_metrics,
-)
-from src.models.evaluation.pairwise import clark_west_test, diebold_mariano_test
+from src.models.evaluation.forecast_tests import cw_test, dm_test, forecast_metrics
 from src.models.ml.lgbm import EconomicLGBMModel, TechnicalLGBMModel
 from src.models.persistence import ArtifactManager
 from src.models.validation.walk_forward import run_walk_forward_evaluation
@@ -163,27 +159,8 @@ def run_stream2_ml_pipeline(
         predictions_map[model_id] = wf_res.predictions_df
 
         pred_df = wf_res.predictions_df
-        reg_metrics = compute_regression_metrics(
-            y_true=pred_df["actual_return"],
-            y_pred=pred_df["predicted_return"],
-        )
-        dir_metrics = compute_directional_metrics(
-            y_true_dir=pred_df["actual_direction"],
-            y_pred_dir=pred_df["predicted_direction"],
-        )
-
-        m_metrics = {
-            "model_id": model_id,
-            "name": model_name,
-            "n_oos": len(pred_df),
-            "rmse": float(reg_metrics["rmse"]),
-            "mae": float(reg_metrics["mae"]),
-            "r2_in_sample": float(reg_metrics["r2"]),
-            "directional_accuracy": float(dir_metrics["directional_accuracy"]),
-            "mcc": float(dir_metrics["mcc"]),
-            "pt_stat": float(dir_metrics["pt_stat"]),
-            "pt_p_value": float(dir_metrics["pt_p_value"]),
-        }
+        met = forecast_metrics(pred_df["actual_return"], pred_df["predicted_return"])  # vs zero (M0a)
+        m_metrics = {"model_id": model_id, "name": model_name, **met}
         leaderboard_records.append(m_metrics)
         executed_models.append(model_id)
 
@@ -204,67 +181,36 @@ def run_stream2_ml_pipeline(
             df_m4_common = pred_m4.loc[common_idx]
             df_m5_common = pred_m5.loc[common_idx]
 
-            e_cand = df_m5_common["actual_return"] - df_m5_common["predicted_return"]
-            e_bench = df_m4_common["actual_return"] - df_m4_common["predicted_return"]
-
-            # Diebold-Mariano (HLN 1997) with Squared Error Loss (MSE)
-            dm_sq = diebold_mariano_test(
-                e_candidate=e_cand,
-                e_benchmark=e_bench,
-                loss="squared",
-                h=1,
-                small_sample_correction=True,
-                candidate_id="M5",
-                benchmark_id="M4",
-            )
-
-            # Diebold-Mariano (HLN 1997) with Absolute Error Loss (MAE)
-            dm_abs = diebold_mariano_test(
-                e_candidate=e_cand,
-                e_benchmark=e_bench,
-                loss="absolute",
-                h=1,
-                small_sample_correction=True,
-                candidate_id="M5",
-                benchmark_id="M4",
-            )
-
-            # Clark-West (2007) nested model test
-            cw = clark_west_test(
-                y_true=df_m5_common["actual_return"],
-                y_pred_small=df_m4_common["predicted_return"],
-                y_pred_large=df_m5_common["predicted_return"],
-                candidate_id="M5",
-                benchmark_id="M4",
-            )
+            y_c = df_m5_common["actual_return"]
+            p5, p4 = df_m5_common["predicted_return"], df_m4_common["predicted_return"]
+            dm_sq = dm_test(y_c, p5, p4, loss="squared", horizon=1, candidate_id="M5", benchmark_id="M4")
+            dm_abs = dm_test(y_c, p5, p4, loss="absolute", horizon=1, candidate_id="M5", benchmark_id="M4")
+            cw = cw_test(y_c, p5, p4, horizon=1, candidate_id="M5", benchmark_id="M4")
 
             pw_record = {
                 "candidate_id": "M5",
                 "benchmark_id": "M4",
                 "hypothesis": "H0: Refining spreads (M5) do not reduce OOS forecast error over technical momentum (M4).",
                 "n_obs": len(common_idx),
-                "dm_squared_hln_stat": dm_sq.test_statistic,
-                "dm_squared_p_value": dm_sq.p_value,
-                "dm_squared_reject_005": dm_sq.reject_h0_at_005,
-                "dm_squared_loss_diff_mean": dm_sq.loss_differential_mean,
-                "dm_absolute_hln_stat": dm_abs.test_statistic,
-                "dm_absolute_p_value": dm_abs.p_value,
-                "dm_absolute_reject_005": dm_abs.reject_h0_at_005,
-                "dm_absolute_loss_diff_mean": dm_abs.loss_differential_mean,
-                "cw_stat": cw.test_statistic,
-                "cw_p_value": cw.p_value,
-                "cw_reject_005": cw.reject_h0_at_005,
-                "cw_adjusted_loss_diff": cw.loss_differential_mean,
+                "dm_squared_hln_stat": dm_sq.statistic,
+                "dm_squared_p_value_one_sided": dm_sq.p_value_one_sided,
+                "dm_squared_reject_005": dm_sq.reject_at(0.05),
+                "dm_squared_loss_diff_mean": dm_sq.mean_differential,
+                "dm_absolute_hln_stat": dm_abs.statistic,
+                "dm_absolute_p_value_one_sided": dm_abs.p_value_one_sided,
+                "dm_absolute_reject_005": dm_abs.reject_at(0.05),
+                "dm_absolute_loss_diff_mean": dm_abs.mean_differential,
+                "cw_stat": cw.statistic,
+                "cw_p_value_one_sided": cw.p_value_one_sided,
+                "cw_reject_005": cw.reject_at(0.05),
+                "cw_adjusted_loss_diff": cw.mean_differential,
             }
             pairwise_results.append(pw_record)
             artifact_mgr.save_metrics(pairwise_results, filename="stream2_pairwise_tests.json")
 
-            logger.info("DM Test (Squared Loss): stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
-                        dm_sq.test_statistic, dm_sq.p_value, dm_sq.reject_h0_at_005)
-            logger.info("DM Test (Absolute Loss): stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
-                        dm_abs.test_statistic, dm_abs.p_value, dm_abs.reject_h0_at_005)
-            logger.info("Clark-West Test: stat=%.4f, p-value=%.4e (Reject H0 at 5%%: %s)",
-                        cw.test_statistic, cw.p_value, cw.reject_h0_at_005)
+            logger.info("DM squared: stat=%.4f p1=%.4g | DM absolute: stat=%.4f p1=%.4g | CW: stat=%.4f p1=%.4g",
+                        dm_sq.statistic, dm_sq.p_value_one_sided, dm_abs.statistic, dm_abs.p_value_one_sided,
+                        cw.statistic, cw.p_value_one_sided)
         else:
             logger.warning("No overlapping evaluation indices between M4 and M5 for pairwise testing.")
 
@@ -295,7 +241,7 @@ def run_stream2_ml_pipeline(
         print("\n" + "=" * 90)
         print("                 SPAFS V5.2 - STREAM 2 ML LEADERBOARD")
         print("=" * 90)
-        print(df_leaderboard[["model_id", "n_oos", "rmse", "mae", "directional_accuracy", "mcc", "pt_stat"]].to_string(index=False))
+        print(df_leaderboard[["model_id", "n", "rmse", "mae", "r2_oos_pct", "da_pct", "mcc", "pt_stat"]].to_string(index=False))
         print("=" * 90)
 
     # Manifest creation

@@ -1,143 +1,189 @@
-# PETRO95 WORKFLOW TEAM (SPAFS V5.2)
-## Singapore Petroleum Asymmetric Forecasting System — Production Data Platform & Econometric Modeling
+# SPAFS V5.2 — Singapore Petroleum Asymmetric & Risk Forecasting System
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/Status-Data%20Platform%20Ready-success)]()
-[![Methodology](https://img.shields.io/badge/Specification-SPAFS%20V5.2-blue)](SPAFS_V5_2_BLUEPRINT_AND_SYSTEM_SPECIFICATION.md)
-[![License](https://img.shields.io/badge/License-Academic%20Research-lightgrey)]()
+[![Tests](https://img.shields.io/badge/Tests-81%2F81%20Passing-brightgreen)]()
+[![Governance](https://img.shields.io/badge/Point--in--Time-08%3A30%20SGT%20Strict-blue)]()
 
-Repository chính thức của nhóm nghiên cứu phát triển dự án **Dự báo tỷ suất thay đổi & hướng biến động giá chuẩn xăng thành phẩm bán buôn Platts FOB Singapore Mogas 95 (MG95)**. Hệ thống kết hợp mô hình kinh tế lượng phân tách cú sốc bất đối xứng (**RQ1 — Asymmetric ADL**) và học máy bảng ngoài mẫu (**RQ2 — Walk-Forward LightGBM & Tín hiệu Thông tin**).
+Hệ thống nghiên cứu định lượng và dự báo giá xăng thành phẩm bán buôn **Platts FOB Singapore Mogas 95 (MG95)** — chuỗi giá cơ sở tham chiếu cho điều hành giá xăng dầu tại Việt Nam — kết hợp dữ liệu dầu thô **ICE Brent (`BZ=F`)** và biên lợi nhuận lọc dầu giai đoạn **2008–2025**.
 
----
+Dự án được tổ chức thành **3 luồng thực thi độc lập, tái lập 100%** (điều phối qua [`run_pipeline.py`](run_pipeline.py)):
 
-## 📌 1. Bối Cảnh Nghiên Cứu & Kiến Trúc Dự Án
-
-* **Chuẩn giá đánh giá (Benchmark Assessment):** S&P Global Platts FOB Singapore Mogas 95 Assessment (MOC 16:30 SGT, kỳ giao nhận 15–30 ngày).
-* **Nguyên liệu thô đầu vào (Upstream Input):** Hợp đồng tương lai dầu thô ICE Brent (`BZ=F`, chốt phiên ~02:30–03:30 SGT sáng hôm sau tại London/NY).
-* **Quản trị thời gian thực (Point-in-Time Governance):** Khóa cứng mốc thông tin $t_{origin} = \text{08:30 SGT sáng ngày } t+1$. Triệt tiêu 100% rủi ro rò rỉ tương lai (Lookahead Bias).
-* **Khung nghiên cứu 2 mẫu độc lập (Two-Sample Framework):**
-  * **Luồng 1 (2008–2025, $N = 4,428$):** Phục vụ kiểm định truyền dẫn kinh tế lượng RQ1 và các mô hình cơ sở ($M0 \to M3$).
-  * **Luồng 2 (2017–2025, $N = 2,255$):** Phục vụ kiểm định giá trị gia tăng của tin tức RQ2 và các mô hình học máy ($M4 \to M6$), chia rõ Train (2017–2019) và Out-of-Sample Test (2020–2025).
+1. **Luồng 1 (`--flow data`) — Kỹ nghệ dữ liệu & Quản trị Point-in-Time (08:30 SGT):** Làm sạch, kiểm toán 8 cổng dữ liệu, căn chỉnh múi giờ London/New York → Singapore và tạo mục tiêu đa kỳ hạn ($h \in \{1, 5, 21\}$ phiên).
+2. **Luồng 2 (`--flow point`) — Dự báo điểm & hướng giá ($M0a \to M5$, RNN, LSTM):** Kiểm định truyền dẫn bất đối xứng (RQ1), giá trị kinh tế lọc dầu (RQ2) và giới hạn dự báo đa kỳ hạn.
+3. **Luồng 3 (`--flow risk`) — Dự báo khoảng dao động & rủi ro giá ($Q0 \to Q4$, Hướng 4):** Dự báo 9 phân vị có điều kiện, khoảng dự báo 80%/95%, xác suất tăng và phân tầng chế độ rủi ro bằng mô phỏng lịch sử có lọc (FHS), GARCH(1,1)-$t$, hồi quy phân vị và Conformal LightGBM (CQR).
 
 ---
 
-## 📂 2. Cấu Trúc Thư Mục Dự Án (Project Structure)
+## 1. Cấu trúc thư mục dự án (Đã tinh gọn & chuẩn hóa theo luồng)
 
 ```text
-petro95_workflow_team/
-├── data/
-│   ├── raw/                                 # Dữ liệu gốc bất biến (Immutable raw data)
-│   │   ├── price_petroleum_platts.csv       # Chuỗi giá Platts 2008-2025 (4,559 dòng)
-│   │   └── brent_crude_daily.csv            # Chuỗi giá ICE Brent BZ=F (4,476 dòng)
-│   ├── interim/                             # Tầng dữ liệu trung gian chuẩn hóa (Parquet)
-│   │   ├── platts_validated.parquet         # Platts sạch vượt qua Gate 1.1 Data Contract
-│   │   ├── brent_continuous.parquet         # Brent đã xử lý roll hợp đồng
-│   │   └── canonical_market_panel.parquet   # Bảng dữ liệu hợp nhất 5 mốc thời gian PIT
-│   └── processed/                           # Tầng dữ liệu phục vụ trực tiếp mô hình
-│       ├── spafs_full_features_daily.parquet# Bộ 47 đặc trưng kinh tế lọc dầu hoàn chỉnh
-│       ├── stream1_econometric_2008_2025.parquet # Mẫu toàn vẹn cho M0-M3 & RQ1 (N = 4,428)
-│       ├── stream2_aligned_nlp_2017_2025.parquet # Mẫu đối chứng cho M4-M6 & RQ2 (N = 2,255)
-│       └── weekly_price_robustness.parquet  # Dữ liệu tuần kiểm tra độ bền vững tần suất
+Petro_95/
+├── run_pipeline.py                              # Bộ điều phối tổng (CLI) cho cả 3 luồng + kiểm thử
+├── README.md                                    # Tài liệu tổng quan và hướng dẫn vận hành
 │
-├── reports/
-│   └── data_quality/                        # Hồ sơ kiểm toán chất lượng dữ liệu
-│       ├── platts_audit.json / .csv         # Báo cáo kiểm toán Data Contract Gate 1.1
-│       ├── brent_audit.json / .csv          # Báo cáo kiểm toán dữ liệu Brent Gate 1.2
-│       ├── canonical_panel_audit.json / .csv# Báo cáo kiểm toán ghép nối PIT Gate 1.3
-│       ├── partition_audit.json / .csv      # Báo cáo kiểm toán phân chia hai luồng mẫu
-│       ├── weekly_audit.json / .csv         # Báo cáo kiểm toán dữ liệu tuần
-│       └── pipeline_manifest.json / .csv    # Báo cáo tổng thể toàn bộ pipeline
+├── data/                                        # Kiến trúc dữ liệu 3 tầng
+│   ├── raw/                                     # Dữ liệu gốc bất biến (Platts 2008–2025, ICE Brent)
+│   ├── interim/                                 # Dữ liệu trung gian đã qua kiểm toán Data Contract
+│   └── processed/                               # Dữ liệu sẵn sàng cho mô hình (Stream 1, Stream 2, Multi-horizon)
 │
-├── src/
-│   └── data_proccessing/                    # Gói kỹ nghệ dữ liệu & quản trị PIT
-│       ├── config.py                        # Cấu hình đóng băng, đường dẫn, mốc giờ PIT
-│       ├── aliases.py                       # Bảng ánh xạ tên cột & whitelist đặc trưng
-│       ├── model_schemas.py                 # Khai báo schema chuẩn mực cho M0 -> M6
-│       ├── exceptions.py                    # Ngoại lệ DataContractViolationError
-│       ├── helpers.py                       # Tiện ích chuẩn hóa tên, parsing, timestamp SGT
-│       ├── io.py                            # Wrapper đọc/ghi Parquet/CSV an toàn
-│       ├── pipeline.py                      # Bộ điều phối toàn diện Step 01 -> Step 08
-│       ├── README.md                        # Hướng dẫn chi tiết package data_proccessing
-│       └── data_handling/                   # Các module xử lý dữ liệu chi tiết
-│           ├── validate_plats.py            # Kiểm toán Platts Mogas 95/92 và Gasoil
-│           ├── validate_brent.py            # Kiểm toán hợp đồng tương lai Brent
-│           ├── alignment.py                 # Ghép nối As-Of Cutoff 08:30 SGT
-│           ├── target.py                    # Xây dựng biến mục tiêu r_{t+1} và y_{t+1}
-│           ├── market_features.py           # Spreads, Volatility 30D, Ngưỡng động
-│           ├── news_pit.py                  # Tổng hợp tin tức theo cửa sổ PIT
-│           ├── patrition.py                 # Phân chia hai luồng nghiên cứu
-│           └── weekly.py                    # Tổng hợp chuỗi tuần robustness
+├── src/                                         # Toàn bộ mã nguồn cốt lõi (27 module Python)
+│   ├── data_proccessing/                        # [LUỒNG 1] Kỹ nghệ dữ liệu & Quản trị Point-in-Time
+│   │   ├── config.py                            # Cấu hình đóng băng, đường dẫn, quy tắc 08:30 SGT
+│   │   ├── aliases.py                           # Ánh xạ tên cột & danh sách đặc trưng hợp lệ
+│   │   ├── model_schemas.py                     # Khai báo schema đầu vào/đầu ra cho các mô hình
+│   │   ├── exceptions.py                        # Ngoại lệ DataContractViolationError
+│   │   ├── helpers.py                           # Chuẩn hóa tên cột, xử lý thời gian SGT & JSON
+│   │   ├── io.py                                # Đọc/ghi Parquet & CSV an toàn
+│   │   ├── pipeline.py                          # Điều phối 8 cổng xử lý dữ liệu (Step 01 -> Step 08)
+│   │   └── data_handling/                       # Các module xử lý và kiểm toán chuyên biệt
+│   │       ├── validate_plats.py                # Gate 1.1: Kiểm toán Platts Mogas 95/92 & Gasoil
+│   │       ├── validate_brent.py                # Gate 1.2: Kiểm toán hợp đồng tương lai Brent
+│   │       ├── alignment.py                     # Gate 1.3: Ghép nối As-Of trước 08:30 SGT
+│   │       ├── target.py                        # Step 04A: Mục tiêu lợi suất & hướng 1 ngày
+│   │       ├── multi_horizon_targets.py         # Step 04B: Mục tiêu đa kỳ hạn (h = 1, 5, 21 phiên)
+│   │       ├── market_features.py               # Step 05: Crack spread, volatility 30D, cú sốc
+│   │       ├── news_pit.py                      # Step 06: Khung tổng hợp tin tức theo PIT
+│   │       ├── patrition.py                     # Step 07: Chia Luồng 1 (2008–2025) & Luồng 2 (2017–2025)
+│   │       ├── weekly.py                        # Step 08: Dữ liệu tần suất tuần (robustness)
+│   │       ├── audit_record_level_pit.py        # Kiểm toán bất biến thời gian từng bản ghi
+│   │       └── stationarity_audit.py            # Kiểm định nghiệm đơn vị ADF & tính dừng KPSS
+│   │
+│   └── models/                                  # [LUỒNG 2 & 3] Hệ thống mô hình, kiểm định & đánh giá
+│       ├── base.py                              # Lớp cơ sở BaseForecastingModel
+│       ├── diagnostics.py                       # Kiểm định đa cộng tuyến (VIF) & phần dư
+│       ├── persistence.py                       # Quản lý lưu trữ mô hình và manifest SHA-256
+│       ├── validation/
+│       │   └── walk_forward.py                  # Engine walk-forward dùng chung (purge = h, embargo E)
+│       ├── evaluation/
+│       │   ├── forecast_tests.py                # Metric dự báo điểm & kiểm định DM-HLN, CW, PT
+│       │   ├── interval_tests.py                # Metric phân vị/khoảng: Pinball, Kupiec, Christoffersen, QLIKE
+│       │   ├── hypothesis.py                    # Kiểm định Wald HAC cho giả thuyết đối xứng RQ1
+│       │   ├── consolidate_multi_horizon_analysis.py # Tổng hợp bảng xếp hạng & kiểm định đa kỳ hạn
+│       │   └── reproducible_pairwise_audit.py   # Đối soát thống kê trên cửa sổ OOS chung (754 phiên)
+│       ├── econometric/                         # Mô hình kinh tế lượng (M0a, M0b, M1, M2, M3)
+│       │   ├── naive.py                         # M0a (Random Walk) & M0b (Momentum/Persistence)
+│       │   ├── arma.py                          # M1: ARMA(1,1) đa bước
+│       │   └── dynamic_adl.py                   # M2 (ADL đối xứng) & M3 (ADL bất đối xứng)
+│       ├── ml/
+│       │   └── lgbm.py                          # M4 (LightGBM kỹ thuật) & M5 (LightGBM kinh tế lọc dầu)
+│       ├── dl/
+│       │   └── sequence_models.py               # Ensemble 5 seed cho RNN & LSTM đa kỳ hạn
+│       ├── risk/                                # [LUỒNG 3 - HƯỚNG 4] Dự báo khoảng & rủi ro giá
+│       │   ├── quantile_models.py               # 5 mô hình phân vị Q0, Q1 (EWMA), Q2 (GARCH-t), Q3 (QR), Q4 (CQR)
+│       │   └── figures.py                       # Sinh biểu đồ quạt (fan chart), độ bao phủ & tỷ số rủi ro
+│       ├── runner_econometric.py                # Runner Luồng 2A: M0a–M3 trên Stream 1 & Wald RQ1
+│       ├── runner_ml.py                         # Runner Luồng 2B: M4–M5 trên Stream 2 & CW/DM RQ2
+│       ├── runner_multi_horizon_traditional.py  # Runner Luồng 2C: M0a–M5 đa kỳ hạn (h = 1, 5, 21)
+│       └── runner_risk_multi_horizon.py         # Runner Luồng 3: Q0–Q4 đa kỳ hạn trên Stream 1 & Stream 2
 │
-├── SPAFS_V5_2_BLUEPRINT_AND_SYSTEM_SPECIFICATION.md # Bản đặc tả phương pháp luận toàn diện V5.2
-└── .gitignore                               # Loại trừ file notebook (.ipynb) và cache
+├── reports/                                     # Báo cáo phân tách rõ theo từng nhánh nghiên cứu
+│   ├── data_quality/                            # [Luồng 1] Báo cáo kiểm toán dữ liệu, PIT & tính dừng (.csv/.json)
+│   ├── 01_point_forecasting/                    # [Luồng 2] Báo cáo dự báo điểm & hướng (M0a–M5, RNN/LSTM)
+│   │   ├── 01_TRINH_BAY_DE_HIEU.md              # Bản trình bày trực quan cho giảng viên
+│   │   └── 02_BAO_CAO_KY_THUAT_M0_M5_DL.md      # Đặc tả kỹ thuật, sửa lỗi & bảng số đầy đủ
+│   ├── 02_risk_forecasting/                     # [Luồng 3 - Hướng 4] Báo cáo dự báo khoảng & rủi ro (Q0–Q4)
+│   │   ├── 01_TRINH_BAY_DE_HIEU.md              # Bản trình bày trực quan, dễ hiểu cho giảng viên
+│   │   ├── 02_DAC_TA_KY_THUAT_VA_KET_QUA.md     # Đặc tả pipeline, công thức metric, DM & so sánh tài liệu
+│   │   └── 03_KE_HOACH_NGHIEN_CUU_HUONG_4.md    # Đề cương thiết kế ban đầu của Hướng 4
+│   └── 03_future_directions/                    # Định hướng mở rộng tiếp theo
+│       └── HUONG_1_DU_BAO_TUAN_THANG_BANG_GIA_KY_HAN.md # Kế hoạch tích hợp dữ liệu kỳ hạn (swap/futures)
+│
+├── artifacts/                                   # Kết quả đầu ra từ thực nghiệm (đồng bộ 100% với code)
+│   ├── models/                                  # Trọng số & hệ số M0a..M5 (.joblib, .json)
+│   ├── predictions/                             # Dự báo OOS từng phiên của Stream 1 & Stream 2 (.parquet)
+│   ├── metrics/                                 # Bảng xếp hạng, Wald test, VIF, kiểm định cặp (.csv, .json)
+│   ├── multi_horizon/                           # Dự báo & bảng xếp hạng đa kỳ hạn M0a..M5
+│   ├── deep_learning/                           # Dự báo OOS & checkpoint 30 mô hình RNN/LSTM
+│   ├── master_consolidation/                    # Bảng tổng hợp đa kỳ hạn, kiểm định HAC & phân tích cú sốc
+│   ├── manifests/                               # Hồ sơ truy vết thực thi & kiểm toán PIT (.json)
+│   └── risk/                                    # Đầu ra Hướng 4 (stream1/, stream2/, figures/)
+│
+├── notebooks/                                   # Sổ tay khám phá dữ liệu (EDA) & thu thập dữ liệu
+│   ├── 01_crawl_data.ipynb
+│   ├── 02_data_cleaning.ipynb
+│   ├── 03_eda_platts_and_brent.ipynb
+│   ├── 04_eda_cross_market_interaction.ipynb
+│   └── 05_eda_thuyet_trinh_mg95_brent.ipynb
+│
+├── docs/                                        # Quản trị kiến trúc (ADR 0001–0005) & Từ điển thuật ngữ (GLOSSARY)
+│   ├── GLOSSARY.md
+│   ├── adr/
+│   └── agents/
+│
+└── tests/                                       # Bộ 81 kiểm thử tự động (Unit & Integration Tests)
+    ├── test_model_schemas.py
+    ├── test_hypothesis_and_guards.py
+    ├── test_models.py
+    ├── test_forecast_tests_and_walk_forward.py
+    └── test_risk_models_and_interval_tests.py
 ```
 
 ---
 
-## ⚡ 3. Hướng Dẫn Vận Hành Pipeline Dữ Liệu (Quickstart)
+## 2. Hướng dẫn chạy theo từng luồng
 
-### Yêu cầu môi trường
-* Python 3.10+ (Khuyên dùng Python 3.11)
-* Các thư viện bắt buộc: `pandas`, `numpy`, `scipy`, `pyarrow`
+Môi trường Python chuẩn của dự án: `D:\Test\env_prj\Scripts\python.exe` (Python 3.11, đã cài đặt đầy đủ `pandas`, `numpy`, `scipy`, `statsmodels`, `arch`, `lightgbm`, `torch`, `pytest`).
 
-### Chạy kiểm toán và xử lý toàn bộ pipeline từ đầu đến cuối
-
-Chạy một lệnh duy nhất từ thư mục gốc của repository:
+### Cách 1: Chạy qua bộ điều phối tổng `run_pipeline.py` (Khuyên dùng)
 
 ```powershell
-python -X utf8 -c "import sys; sys.path.insert(0, '.'); from src.data_proccessing.config import build_config; from src.data_proccessing.pipeline import run_pipeline; manifest = run_pipeline(build_config('.')); print('Trạng thái:', manifest['status']); print('Kết quả dòng:', manifest['row_counts'])"
+# 1. Chạy toàn bộ 81 test kiểm tra công thức, chống rò rỉ dữ liệu & mô hình (~50 giây)
+D:\Test\env_prj\Scripts\python.exe run_pipeline.py --flow test
+
+# 2. Chạy Luồng 1: Kỹ nghệ dữ liệu Point-in-Time & kiểm toán tính dừng
+D:\Test\env_prj\Scripts\python.exe run_pipeline.py --flow data
+
+# 3. Chạy Luồng 2: Dự báo điểm & hướng giá (M0a-M5, RNN, LSTM + kiểm định DM/CW/PT/Wald)
+D:\Test\env_prj\Scripts\python.exe run_pipeline.py --flow point
+
+# 4. Chạy Luồng 3 (Hướng 4): Dự báo khoảng dao động & rủi ro giá (Q0-Q4 + vẽ biểu đồ)
+D:\Test\env_prj\Scripts\python.exe run_pipeline.py --flow risk
+
+# Hoặc chạy toàn bộ từ đầu đến cuối (test -> data -> point -> risk)
+D:\Test\env_prj\Scripts\python.exe run_pipeline.py --flow all
 ```
 
-Hoặc qua mã Python:
+### Cách 2: Chạy riêng lẻ từng bước trong từng luồng
 
-```python
-import sys
-sys.path.insert(0, ".")
+```powershell
+# --- LUỒNG 1: DỮ LIỆU ---
+D:\Test\env_prj\Scripts\python.exe -m src.data_proccessing.pipeline
+D:\Test\env_prj\Scripts\python.exe -m src.data_proccessing.data_handling.multi_horizon_targets
+D:\Test\env_prj\Scripts\python.exe -m src.data_proccessing.data_handling.audit_record_level_pit
+D:\Test\env_prj\Scripts\python.exe -m src.data_proccessing.data_handling.stationarity_audit
 
-from src.data_proccessing.config import build_config
-from src.data_proccessing.pipeline import run_pipeline
+# --- LUỒNG 2: DỰ BÁO ĐIỂM & HƯỚNG (M0a-M5, RNN, LSTM) ---
+D:\Test\env_prj\Scripts\python.exe src/models/runner_econometric.py
+D:\Test\env_prj\Scripts\python.exe src/models/dl/sequence_models.py
+D:\Test\env_prj\Scripts\python.exe src/models/runner_multi_horizon_traditional.py
+D:\Test\env_prj\Scripts\python.exe src/models/runner_ml.py --model all
+D:\Test\env_prj\Scripts\python.exe src/models/evaluation/consolidate_multi_horizon_analysis.py
+D:\Test\env_prj\Scripts\python.exe src/models/evaluation/reproducible_pairwise_audit.py
 
-# 1. Khởi tạo cấu hình mặc định
-cfg = build_config(".")
-
-# 2. Thực thi toàn bộ 8 bước trong pipeline
-manifest = run_pipeline(cfg)
-
-# 3. In kết quả trạng thái kiểm toán
-print("Pipeline Status:", manifest["status"])
-print("Generated Row Counts:", manifest["row_counts"])
+# --- LUỒNG 3 (HƯỚNG 4): DỰ BÁO KHOẢNG & RỦI RO (Q0-Q4) ---
+D:\Test\env_prj\Scripts\python.exe src/models/runner_risk_multi_horizon.py --dataset all
+D:\Test\env_prj\Scripts\python.exe src/models/risk/figures.py
 ```
 
 ---
 
-## 🔬 4. Hệ Thống 7 Mô Hình Thực Nghiệm (M0 → M6)
+## 3. Tóm tắt kết quả cốt lõi của dự án
 
-| Mã Mô Hình | Tên Cấu Hình Mô Hình | Tập Biến Đặc Trưng Đầu Vào | Vai Trò Học Thuật & Kiểm Định |
-| :--- | :--- | :--- | :--- |
-| **M0a / M0b** | Naive Return / Direction | $r_{t+1} = 0$ / $\text{sign}(r_t)$ | Chuẩn sàn đối chứng cơ sở (Random Walk / EMH). |
-| **M1** | ARMA(1, 1) | Lags nội tại của $r_{MG95}$ | Baseline chuỗi thời gian thống kê cổ điển. |
-| **M2** | Linear Dynamic Regression | Lags MG95 + Lags Brent + $\text{Spread}_{t-1}$ | Chuẩn tuyến tính đối xứng (Mỏ neo cân bằng). |
-| **M3** | Asymmetric ADL | Tách $r_{Brent}^+$ và $r_{Brent}^-$ | **Kiểm định RQ1 qua Wald Test (Newey-West HAC)**. |
-| **M4** | Technical LightGBM | Lags MG95, Lags Brent, Trailing Volatility 30D | Đánh giá năng lực ML trên biến kỹ thuật số. |
-| **M5** | Economic LightGBM | M4 + Octane Spread + Diesel Spread + Gas-Brent | Benchmark Kinh tế lọc dầu (Mẫu 2017+). |
-| **M6** | Economic + News LightGBM | Toàn bộ M5 + `(FINBERT_SENTIMENT, NEWS_COUNT)` | **Kiểm định RQ2 qua Clark-West (2007) & PT Test**. |
+| Nhánh nghiên cứu | Kỳ hạn 1 ngày ($h=1$) | Kỳ hạn 1 tuần ($h=5$) | Kỳ hạn 1 tháng ($h=21$) |
+|---|---|---|---|
+| **Luồng 2: Dự báo điểm & hướng** (`M0a..M5`, `RNN`, `LSTM`) | **Dự báo tốt:** `M2` (ADL) giảm **39,8%** MSE so với Random Walk; đoán đúng hướng **69–71%** nhờ độ trễ múi giờ từ giá dầu Brent đêm qua. Truyền dẫn giá bán buôn là **đối xứng** (Wald $p = 0,95$). | **Cải thiện nhỏ:** `M4` (LightGBM) giảm **4,6%** MSE; đúng hướng ~56%. | **Không dự báo được hướng:** Mọi mô hình điểm đều có $R^2_{\text{OOS}} < 0$ (thông tin quá khứ đã phản ánh hết vào giá). |
+| **Luồng 3 (Hướng 4): Dự báo khoảng & rủi ro** (`Q0..Q4`) | **Dự báo cả hướng lẫn biên độ:** `Q3` (Hồi quy phân vị) giảm **25–26%** pinball loss, thu hẹp khoảng 80% từ 17–32%, Brier skill **+25%**. | **Khoảng hiệu chỉnh chuẩn:** `Q3` đạt độ bao phủ **80,1%** (mục tiêu 80%), giảm **5,5–9,1%** pinball loss ($p < 0,001$). | **Dự báo tốt mức độ rủi ro dài hạn:** Trên chuỗi 2012–2025, `Q2` (GARCH-t + FHS) đạt độ bao phủ **80,3%** (Kupiec $p = 0,94$), và phân biệt được thời kỳ rủi ro cao với độ biến động thực tế gấp **2,56–3,03 lần** thời kỳ rủi ro thấp. |
 
 ---
 
-## 📊 5. Kết Quả Thực Nghiệm Nổi Bật
+## 4. Danh mục báo cáo chính thức
 
-1. **Kết quả kiểm định Wald (RQ1 — Mẫu 17.5 năm, $N = 4,428$):**
-   * Hệ số truyền dẫn cú sốc tăng: $\beta^+ = 0.6614$ ($p < 10^{-16}$).
-   * Hệ số truyền dẫn cú sốc giảm: $\beta^- = 0.6577$ ($p < 10^{-16}$).
-   * Kiểm định giả thuyết đối xứng: $\text{F-stat} = 0.0031$, $p\text{-value} = \mathbf{0.9552} > 0.05$.
-   * **Kết luận khoa học:** Ở cấp độ giá chuẩn bán buôn Platts MOC Singapore, truyền dẫn từ dầu thô sang xăng Mogas 95 là **hoàn toàn đối xứng** (không tồn tại hiện tượng "Rockets and Feathers" vốn chỉ xuất hiện ở thị trường bán lẻ).
-2. **Hiệu năng ngoài mẫu OOS 6 năm (2020–2025, $N_{test} = 1,508$):**
-   * Mô hình Linear Dynamic ($M2$) và Asymmetric ADL ($M3$) đạt $R^2_{OOS} \approx 31.2\%$, Direction Accuracy $\approx 71.5\%$ ($p_{PT} < 10^{-16}$).
-   * Mô hình LightGBM đa mầm ($M4, M5$) kiểm soát quá khớp đạt $R^2_{OOS} \approx 21.3\%$, Direction Accuracy $\approx 70.9\% \pm 0.3\%$.
-
----
-
-## 📖 6. Tài Liệu Đặc Tả Phương Pháp Luận Chi Tiết
-
-Xem bản đặc tả hệ thống toàn diện V5.2 với đầy đủ chứng minh toán học, phương trình hồi quy, ma trận rủi ro và bảng kiểm 8 Gate tại:  
-👉 **[SPAFS_V5_2_BLUEPRINT_AND_SYSTEM_SPECIFICATION.md](SPAFS_V5_2_BLUEPRINT_AND_SYSTEM_SPECIFICATION.md)**
+* **Nhánh dự báo điểm & hướng (Luồng 2):**
+  * [Bản trình bày dễ hiểu cho giảng viên](reports/01_point_forecasting/01_TRINH_BAY_DE_HIEU.md)
+  * [Báo cáo kỹ thuật & kết quả thực nghiệm M0a–M5, RNN/LSTM](reports/01_point_forecasting/02_BAO_CAO_KY_THUAT_M0_M5_DL.md)
+* **Nhánh dự báo khoảng dao động & rủi ro giá (Luồng 3 — Hướng 4):**
+  * [Bản trình bày dễ hiểu cho giảng viên (Hướng 4)](reports/02_risk_forecasting/01_TRINH_BAY_DE_HIEU.md)
+  * [Bản đặc tả kỹ thuật, pipeline, metric & kết quả đầy đủ (Hướng 4)](reports/02_risk_forecasting/02_DAC_TA_KY_THUAT_VA_KET_QUA.md)
+  * [Kế hoạch nghiên cứu Hướng 4](reports/02_risk_forecasting/03_KE_HOACH_NGHIEN_CUU_HUONG_4.md)
+* **Định hướng mở rộng:**
+  * [Hướng 1: Dự báo tuần/tháng bằng giá kỳ hạn (Swap/Futures)](reports/03_future_directions/HUONG_1_DU_BAO_TUAN_THANG_BANG_GIA_KY_HAN.md)

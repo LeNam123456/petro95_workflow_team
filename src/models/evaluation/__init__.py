@@ -1,28 +1,25 @@
 """Evaluation, metrics, and hypothesis testing suite for SPAFS V5.2.
 
-Provides:
-- Metrics: compute_regression_metrics, compute_directional_metrics
-- Hypothesis: run_wald_test, WaldTestResult
-- Pairwise: diebold_mariano_test, clark_west_test, PairwiseTestResult
+- forecast_tests: forecast_metrics, dm_test, cw_test, pt_test (single source of truth)
+- hypothesis: in-sample Wald tests for RQ1
 """
 
+from .forecast_tests import TestResult, cw_test, dm_test, forecast_metrics, pt_test
 from .hypothesis import (
     WaldTestResult,
     build_dynamic_restriction_matrix,
     run_rq1_wald_tests,
     run_wald_test,
 )
-from .metrics import compute_directional_metrics, compute_regression_metrics
-from .pairwise import PairwiseTestResult, clark_west_test, diebold_mariano_test
 
 __all__ = [
-    "compute_regression_metrics",
-    "compute_directional_metrics",
+    "TestResult",
+    "forecast_metrics",
+    "dm_test",
+    "cw_test",
+    "pt_test",
     "WaldTestResult",
     "run_wald_test",
     "build_dynamic_restriction_matrix",
     "run_rq1_wald_tests",
-    "PairwiseTestResult",
-    "diebold_mariano_test",
-    "clark_west_test",
 ]

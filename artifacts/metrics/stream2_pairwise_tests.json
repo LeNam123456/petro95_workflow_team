@@ -4,17 +4,17 @@
     "benchmark_id": "M4",
     "hypothesis": "H0: Refining spreads (M5) do not reduce OOS forecast error over technical momentum (M4).",
     "n_obs": 754,
-    "dm_squared_hln_stat": -0.7747760791522391,
-    "dm_squared_p_value": 0.2193576005656842,
+    "dm_squared_hln_stat": -0.698635268482162,
+    "dm_squared_p_value_one_sided": 0.2424978529855686,
     "dm_squared_reject_005": false,
-    "dm_squared_loss_diff_mean": -0.01647516423246239,
-    "dm_absolute_hln_stat": -1.3087935302192817,
-    "dm_absolute_p_value": 0.09550179312010265,
+    "dm_squared_loss_diff_mean": -0.016475164232462407,
+    "dm_absolute_hln_stat": -1.184712460412981,
+    "dm_absolute_p_value_one_sided": 0.11825246846121097,
     "dm_absolute_reject_005": false,
-    "dm_absolute_loss_diff_mean": -0.006896015800399339,
-    "cw_stat": 1.9687731537207633,
-    "cw_p_value": 0.02448957322839851,
+    "dm_absolute_loss_diff_mean": -0.006896015800399337,
+    "cw_stat": 1.8071561307995034,
+    "cw_p_value_one_sided": 0.035368969404397134,
     "cw_reject_005": true,
-    "cw_adjusted_loss_diff": 0.04271564112463818
+    "cw_adjusted_loss_diff": 0.042715641124638194
   }
 ]

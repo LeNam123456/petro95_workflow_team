@@ -35,11 +35,7 @@ from src.models.econometric.arma import ArmaModel
 from src.models.econometric.dynamic_adl import AsymmetricAdlModel, LinearDynamicModel
 from src.models.econometric.naive import NaiveDirectionModel, NaiveZeroModel
 from src.models.evaluation.hypothesis import run_rq1_wald_tests
-from src.models.evaluation.metrics import (
-    compute_directional_metrics,
-    compute_regression_metrics,
-)
-from src.models.evaluation.pairwise import clark_west_test, diebold_mariano_test
+from src.models.evaluation.forecast_tests import cw_test, dm_test, forecast_metrics
 from src.models.persistence import ArtifactManager
 from src.models.validation.walk_forward import run_walk_forward_evaluation
 
@@ -226,94 +222,62 @@ def run_stream1_econometric_pipeline(
         "M3": lambda: AsymmetricAdlModel(hac_lags=5),
     }
 
+    # All models are evaluated against the same *return* target r_{t+1}. (M0b's schema
+    # target is the 0/1 direction label, which must not be used as a return.)
+    y_return = matrices["M1"].y
+    for mid in model_ids:
+        if not matrices[mid].X.index.equals(y_return.index):
+            raise ValueError(f"Common-sample index mismatch for {mid}")
+
     oos_results: dict[str, Any] = {}
     for mid in model_ids:
         logger.info("Running Walk-Forward for %s...", mid)
         wf_res = run_walk_forward_evaluation(
             model_factory=factories[mid],
             X=matrices[mid].X,
-            y=matrices[mid].y,
+            y=y_return,
             initial_train_size=initial_window,
             refit_every=1,
         )
         oos_results[mid] = wf_res
         artifact_mgr.save_predictions(wf_res.predictions_df, model_id=mid, tag="stream1")
 
-    # Benchmark predictions for Campbell-Thompson OOS-R² (M0a zero return)
     y_true = oos_results["M0a"].predictions_df["actual_return"]
-    y_m0a = oos_results["M0a"].predictions_df["predicted_return"]
+    preds = {mid: oos_results[mid].predictions_df["predicted_return"] for mid in model_ids}
 
-    # Compute Leaderboard
+    # Leaderboard (R2_OOS in % against the M0a zero forecast)
     leaderboard_rows = []
     for mid in model_ids:
-        pred_df = oos_results[mid].predictions_df
-        reg_metrics = compute_regression_metrics(
-            y_true=pred_df["actual_return"],
-            y_pred=pred_df["predicted_return"],
-            y_benchmark=y_m0a,
-        )
-        dir_metrics = compute_directional_metrics(
-            y_true_dir=pred_df["actual_direction"],
-            y_pred_dir=pred_df["predicted_direction"],
-        )
-        leaderboard_rows.append({
-            "model_id": mid,
-            "n_oos": len(pred_df),
-            "rmse": reg_metrics["rmse"],
-            "mae": reg_metrics["mae"],
-            "oos_r2": reg_metrics.get("oos_r2", 0.0),
-            "r2_in_sample": reg_metrics["r2"],
-            "directional_accuracy": dir_metrics["directional_accuracy"],
-            "mcc": dir_metrics["mcc"],
-            "pt_stat": dir_metrics["pt_stat"],
-            "pt_p_value": dir_metrics["pt_p_value"],
-        })
+        met = forecast_metrics(y_true, preds[mid], benchmark=preds["M0a"])
+        leaderboard_rows.append({"model_id": mid, **met})
 
     df_leaderboard = pd.DataFrame(leaderboard_rows)
     artifact_mgr.save_leaderboard(df_leaderboard, filename="stream1_econometric_leaderboard.csv")
     artifact_mgr.save_metrics(leaderboard_rows, filename="stream1_econometric_leaderboard.json")
 
-    # Compute Pairwise Statistical Tests across Stream 1 comparisons
+    # Pairwise tests (candidate vs benchmark, h = 1)
     pairwise_reports = []
     stream1_comps = [c for c in PAIRWISE_COMPARISONS if c.eval_stream == "stream1"]
     for comp in stream1_comps:
-        cand_df = oos_results[comp.candidate_id].predictions_df
-        bench_df = oos_results[comp.benchmark_id].predictions_df
-
-        e_cand = cand_df["actual_return"].values - cand_df["predicted_return"].values
-        e_bench = bench_df["actual_return"].values - bench_df["predicted_return"].values
-
-        # Diebold-Mariano Test (HLN 1997)
-        dm_res = diebold_mariano_test(
-            e_candidate=e_cand,
-            e_benchmark=e_bench,
-            loss="squared",
-            h=1,
-            candidate_id=comp.candidate_id,
-            benchmark_id=comp.benchmark_id,
-        )
-
-        # Clark-West Test for Nested Models
-        cw_res = clark_west_test(
-            y_true=cand_df["actual_return"].values,
-            y_pred_small=bench_df["predicted_return"].values,
-            y_pred_large=cand_df["predicted_return"].values,
-            candidate_id=comp.candidate_id,
-            benchmark_id=comp.benchmark_id,
-        )
-
+        c_id, b_id = comp.candidate_id, comp.benchmark_id
+        dm_res = dm_test(y_true, preds[c_id], preds[b_id], loss="squared", horizon=1,
+                         candidate_id=c_id, benchmark_id=b_id)
+        cw_res = cw_test(y_true, preds[c_id], preds[b_id], horizon=1,
+                         candidate_id=c_id, benchmark_id=b_id)
         pairwise_reports.append({
-            "candidate_id": comp.candidate_id,
-            "benchmark_id": comp.benchmark_id,
+            "candidate_id": c_id,
+            "benchmark_id": b_id,
             "hypothesis": comp.hypothesis,
-            "dm_hln_stat": dm_res.test_statistic,
-            "dm_p_value": dm_res.p_value,
-            "dm_reject_005": dm_res.reject_h0_at_005,
-            "dm_mean_loss_diff": dm_res.loss_differential_mean,
-            "cw_stat": cw_res.test_statistic,
-            "cw_p_value": cw_res.p_value,
-            "cw_reject_005": cw_res.reject_h0_at_005,
-            "cw_adjusted_loss_diff": cw_res.loss_differential_mean,
+            "n_obs": dm_res.sample_size,
+            "dm_hln_stat": dm_res.statistic,
+            "dm_p_value_one_sided": dm_res.p_value_one_sided,
+            "dm_p_value_two_sided": dm_res.p_value_two_sided,
+            "dm_reject_005": dm_res.reject_at(0.05),
+            "dm_mean_loss_diff": dm_res.mean_differential,
+            "cw_stat": cw_res.statistic,
+            "cw_p_value_one_sided": cw_res.p_value_one_sided,
+            "cw_reject_005": cw_res.reject_at(0.05),
+            "cw_adjusted_loss_diff": cw_res.mean_differential,
         })
 
     artifact_mgr.save_metrics(pairwise_reports, filename="stream1_pairwise_tests.json")

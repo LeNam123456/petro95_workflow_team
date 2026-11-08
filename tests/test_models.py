@@ -28,11 +28,10 @@ from src.models import (
     NaiveDirectionModel,
     NaiveZeroModel,
     TechnicalLGBMModel,
-    clark_west_test,
-    compute_directional_metrics,
-    compute_regression_metrics,
+    cw_test,
+    forecast_metrics,
     diagnose_residuals,
-    diebold_mariano_test,
+    dm_test,
     run_walk_forward_evaluation,
 )
 
@@ -179,33 +178,28 @@ class TestEvaluationAndDiagnostics:
         y_pred = pd.Series([0.8, -1.5, 2.5, -0.5, 1.8])
         y_bench = pd.Series([0.0, 0.0, 0.0, 0.0, 0.0])
 
-        reg_m = compute_regression_metrics(y_true, y_pred, y_bench)
-        assert reg_m["rmse"] > 0.0
-        assert reg_m["mae"] > 0.0
-        assert "oos_r2" in reg_m
-
-        dir_m = compute_directional_metrics(y_true > 0, y_pred > 0)
-        assert 0.0 <= dir_m["directional_accuracy"] <= 1.0
-        assert "pt_stat" in dir_m
-        assert "pt_p_value" in dir_m
+        m = forecast_metrics(y_true, y_pred, benchmark=y_bench)
+        assert m["rmse"] > 0.0
+        assert m["mae"] > 0.0
+        assert m["r2_oos_pct"] > 0.0
+        assert m["da_pct"] == 100.0
 
     def test_pairwise_diebold_mariano_and_clark_west(self):
         rng = np.random.default_rng(42)
         y_true = rng.standard_normal(100)
         e_cand = rng.standard_normal(100) * 0.8
         e_bench = rng.standard_normal(100) * 1.2
+        pred_cand = y_true - e_cand
+        pred_bench = y_true - e_bench
 
-        # DM test
-        dm_res = diebold_mariano_test(e_cand, e_bench, loss="squared", h=1)
+        dm_res = dm_test(y_true, pred_cand, pred_bench, loss="squared", horizon=1)
         assert dm_res.sample_size == 100
-        assert 0.0 <= dm_res.p_value <= 1.0
+        assert 0.0 <= dm_res.p_value_one_sided <= 1.0
+        assert dm_res.statistic < 0.0  # candidate has smaller errors
 
-        # CW test
-        pred_small = y_true - e_bench
-        pred_large = y_true - e_cand
-        cw_res = clark_west_test(y_true, pred_small, pred_large)
+        cw_res = cw_test(y_true, pred_cand, pred_bench)
         assert cw_res.sample_size == 100
-        assert 0.0 <= cw_res.p_value <= 1.0
+        assert 0.0 <= cw_res.p_value_one_sided <= 1.0
 
     def test_residual_diagnostics(self):
         rng = np.random.default_rng(42)

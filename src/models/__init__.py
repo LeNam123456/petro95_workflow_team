@@ -3,8 +3,8 @@
 Subpackages:
 - econometric: M0a, M0b, M1, M2, M3
 - ml: M4 (Technical LightGBM)
-- evaluation: Metrics, Wald Hypothesis Tests, Pairwise Tests (Diebold-Mariano, Clark-West)
-- validation: Expanding Window Walk-Forward 1-step-ahead engine
+- evaluation: forecast_metrics, DM/CW/PT tests (forecast_tests), Wald hypothesis tests
+- validation: Expanding-window walk-forward engine with purging/embargo (any horizon)
 - diagnostics: Multicollinearity (VIF, Condition Number) & Residual diagnostics
 - persistence: ArtifactManager for reproducible storage
 """
@@ -19,12 +19,12 @@ from .econometric import (
     NaiveZeroModel,
 )
 from .evaluation import (
-    PairwiseTestResult,
+    TestResult,
     WaldTestResult,
-    clark_west_test,
-    compute_directional_metrics,
-    compute_regression_metrics,
-    diebold_mariano_test,
+    cw_test,
+    dm_test,
+    forecast_metrics,
+    pt_test,
     run_wald_test,
 )
 from .ml import TechnicalLGBMModel
@@ -47,13 +47,13 @@ __all__ = [
     "diagnose_multicollinearity",
     "diagnose_residuals",
     # Evaluation & Hypothesis testing
-    "compute_regression_metrics",
-    "compute_directional_metrics",
+    "forecast_metrics",
+    "dm_test",
+    "cw_test",
+    "pt_test",
+    "TestResult",
     "WaldTestResult",
     "run_wald_test",
-    "PairwiseTestResult",
-    "diebold_mariano_test",
-    "clark_west_test",
     # Validation & Walk-Forward
     "WalkForwardResult",
     "run_walk_forward_evaluation",

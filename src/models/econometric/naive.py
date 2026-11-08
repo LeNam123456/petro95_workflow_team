@@ -60,35 +60,39 @@ class NaiveZeroModel(BaseForecastingModel):
 
 
 class NaiveDirectionModel(BaseForecastingModel):
-    """M0b: Naive Directional Momentum Benchmark.
+    """M0b: Naive persistence (random-walk-in-returns) benchmark.
 
-    Formulation:
-        ŷ_{t+1} = 1 if r_{MG95, t} > 0 else 0
-        r̂_{t+1} = r_{MG95, t} (persistence baseline)
+    Formulation (horizon h, r_t = daily log return known at t):
+        r_hat_{t,h} = r_{t-h,h} = sum_{j=0..h-1} r_{t-j}   (last realised h-period return)
+        y_hat_{t,h} = 1 if r_hat_{t,h} > 0 else 0
+    For h = 1 this is r_hat_{t+1} = r_t. Rows without h observations of history are NaN.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, horizon: int = 1) -> None:
         super().__init__(model_id="M0b")
+        if horizon < 1:
+            raise ValueError("horizon must be >= 1")
+        self.horizon = horizon
         self.fitted_n: int = 0
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> NaiveDirectionModel:
-        """Fit M0b (validates input feature presence)."""
+        """Fit M0b (validates input feature presence; no parameters)."""
         _ = self._validate_input_x(X)
         self.fitted_n = len(y)
         self.is_fitted = True
         return self
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
-        """Predict persistence return r̂_{t+1} = r_{MG95, t}."""
+        """Predict the last realised h-period return."""
         self._check_is_fitted()
-        X_val = self._validate_input_x(X)
-        return pd.Series(X_val["mg95_return_pct"].copy(), name="pred_return_M0b")
+        r = self._validate_input_x(X)["mg95_return_pct"]
+        pred = r.copy() if self.horizon == 1 else r.rolling(self.horizon).sum()
+        pred.name = "pred_return_M0b"
+        return pred
 
     def predict_direction(self, X: pd.DataFrame) -> pd.Series:
-        """Predict direction based on current observed return sign."""
-        self._check_is_fitted()
-        X_val = self._validate_input_x(X)
-        dir_series = (X_val["mg95_return_pct"] > 0.0).astype(int)
+        """Predict direction as the sign of the persistence forecast."""
+        dir_series = (self.predict(X) > 0.0).astype(int)
         dir_series.name = "pred_direction_M0b"
         return dir_series
 

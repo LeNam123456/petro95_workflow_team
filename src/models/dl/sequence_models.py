@@ -29,6 +29,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import sys
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -36,8 +38,18 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.data_proccessing.model_schemas import get_model_spec
+from src.models.evaluation.forecast_tests import forecast_metrics
+
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("SPAFS_V5.2.DeepLearning")
+
+# Same information set as M5 (single source: the model registry).
+FEATURES: list[str] = list(get_model_spec("M5").features)
 
 
 class TimeSeriesRNN(nn.Module):
@@ -80,25 +92,9 @@ def create_sequences(X: np.ndarray, y: np.ndarray, lookback: int = 20) -> Tuple[
 
 
 def evaluate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
-    valid = ~np.isnan(y_true) & ~np.isnan(y_pred)
-    yt = y_true[valid]
-    yp = y_pred[valid]
-    e = yt - yp
-    rmse = float(np.sqrt(np.mean(e**2)))
-    mae = float(np.mean(np.abs(e)))
-
-    yd = (yt > 0.0).astype(int)
-    pd = (yp > 0.0).astype(int)
-    da = float(np.mean(yd == pd) * 100.0)
-
-    tp = int(np.sum((yd == 1) & (pd == 1)))
-    tn = int(np.sum((yd == 0) & (pd == 0)))
-    fp = int(np.sum((yd == 0) & (pd == 1)))
-    fn = int(np.sum((yd == 1) & (pd == 0)))
-    denom = np.sqrt(float((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)))
-    mcc = float((tp * tn - fp * fn) / denom) if denom > 0 else 0.0
-
-    return {"rmse": rmse, "mae": mae, "da_pct": da, "mcc": mcc}
+    """RMSE/MAE/DA/MCC via the shared evaluation module."""
+    m = forecast_metrics(y_true, y_pred)
+    return {"rmse": m["rmse"], "mae": m["mae"], "da_pct": m["da_pct"], "mcc": m["mcc"]}
 
 
 def train_single_deep_model(
@@ -216,13 +212,7 @@ def run_deep_learning_pipeline(
     df["market_date"] = pd.to_datetime(df["market_date"])
     df = df.sort_values("market_date").reset_index(drop=True)
 
-    features = [
-        "mg95_return_pct", "mg95_return_lag1", "mg95_return_lag2", "mg95_return_lag3",
-        "brent_return_pct_aligned", "brent_return_lag1", "brent_return_lag2", "brent_return_lag3",
-        "vol_mg95_30d", "economic_shock_flag",
-        "spread_mg95_mg92", "spread_mg95_do005", "spread_mg95_brent", "spread_mg95_brent_lag1",
-        "octane_spread_nonpositive_flag"
-    ]
+    features = FEATURES
     for c in features:
         df[c] = df[c].fillna(0.0)
 
@@ -293,6 +283,7 @@ def run_deep_learning_pipeline(
             pd.to_datetime(test_dates[0]).date(), pd.to_datetime(test_dates[-1]).date()
         )
 
+        horizon_preds: dict[str, np.ndarray] = {}
         for m_type in ["RNN", "LSTM"]:
             seed_metrics = []
             seed_preds = []
@@ -346,6 +337,7 @@ def run_deep_learning_pipeline(
             }
             all_summary.append(summary_item)
 
+            horizon_preds[m_type] = ensemble_pred
             # Store predictions for CSV
             key = f"{m_type}_{h_name}"
             predictions_dump[key] = {
@@ -359,6 +351,13 @@ def run_deep_learning_pipeline(
                 m_type, h_name, ens_metrics["rmse"], ens_metrics["mae"], ens_metrics["da_pct"], ens_metrics["mcc"],
                 np.mean(rmse_vals), np.std(rmse_vals)
             )
+
+        pd.DataFrame({
+            "market_date": pd.to_datetime(test_dates),
+            "actual_return": y_test_seq.astype(float),
+            "pred_return_RNN": horizon_preds["RNN"].astype(float),
+            "pred_return_LSTM": horizon_preds["LSTM"].astype(float),
+        }).to_csv(p_out / f"oos_predictions_dl_{h_name}.csv", index=False)
 
     # Save summary
     df_sum = pd.DataFrame(all_summary)
