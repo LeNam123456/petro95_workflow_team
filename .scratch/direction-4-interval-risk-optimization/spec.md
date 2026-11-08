@@ -158,3 +158,14 @@ Toàn bộ tính năng của Hướng 4 được kiểm thử đi qua đúng **3
 - **Tài liệu tham chiếu liên kết:**
   - Từ điển thuật ngữ miền: `docs/GLOSSARY.md` (và `GLOSSARY.md` ở gốc).
   - Các quyết định kiến trúc: `docs/adr/0001` đến `docs/adr/0005`.
+
+## Comments
+
+**2026-11-08, seam fixes (implement + tdd):**
+- Seam 3: `compare_quantile_forecasts` now drops missing rows jointly across both models (`pinball_loss` is row-aligned, NaN kept), so DM compares identical origins.
+- Seam 3: the Kupiec / Christoffersen / LR_cc subsample uses original positions 0, h, 2h, … even when rows are missing.
+- Seam 3: `build_unified_decision_card(..., history_width_80_by_horizon=...)` seeds the Ex-Ante Risk Regime rank and raises instead of silently defaulting to "Normal". The runner seeds both the card and `evaluate_quantile_forecast` with ex-ante 80% widths forecast over the training period, starting at the earliest origin with 504 purged training rows. The refit grid is unchanged, so OOS forecasts are bit-identical.
+- Seam 1: Q0 now uses the full, unweighted training history (no burn-in), per US9. Q0-based DM results will shift slightly when artifacts are regenerated.
+- Seam 1: a test proves Q2/Q3 stay calibrated without the `arch` library (US10).
+- Known limitation: if an on-grid origin is missing, Christoffersen treats the neighbouring kept origins as adjacent. The production data has no such gaps.
+- Follow-up: `artifacts/risk/` was already stale relative to HEAD before this change. Re-run `runner_risk_multi_horizon.py --dataset all` and refresh the reports.

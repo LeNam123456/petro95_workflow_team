@@ -39,6 +39,7 @@ LEVELS: tuple[float, ...] = (0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975
 RISK_MODEL_IDS: tuple[str, ...] = ("Q0", "Q1", "Q2", "Q3", "Q4")
 DAILY_RETURN_COL = "mg95_return_pct"
 EWMA_LAMBDA = 0.94
+BURN_IN = 63  # first rows of a variance recursion are discarded when fitting on its output
 
 # Features for the conditional quantile models (all known at the 08:30 SGT origin).
 Q3_FEATURES = (
@@ -182,6 +183,7 @@ class _ScaleFHS:
 
     model_id = "?"
     fhs_half_life: int | None = 756
+    burn_in: int = BURN_IN
 
     def __init__(self, horizon: int) -> None:
         self.horizon = horizon
@@ -193,7 +195,7 @@ class _ScaleFHS:
         z = y.to_numpy(dtype=float) / np.sqrt(v)
         # The first rows of the variance recursion are a burn-in.
         self.z_quantiles_ = _empirical_quantiles(
-            z[min(63, len(z) // 4):],
+            z[min(self.burn_in, len(z) // 4):],
             half_life=self.fhs_half_life,
         )
         return self
@@ -214,6 +216,7 @@ class HistoricalSimulation(_ScaleFHS):
 
     model_id = "Q0"
     fhs_half_life = None  # Q0 is the static full-history benchmark
+    burn_in = 0  # no recursion to warm up: every training target counts
 
     def _fit_vol(self, r: np.ndarray) -> np.ndarray:
         return np.ones(len(r))
@@ -295,7 +298,7 @@ class LinearQuantileRegression:
         r = X[DAILY_RETURN_COL].to_numpy(dtype=float)
         s = np.sqrt(self._garch._fit_vol(r))
         D, yy = self._design(X, s), y.to_numpy(dtype=float)
-        burn = min(63, len(yy) // 4)
+        burn = min(BURN_IN, len(yy) // 4)
         self.params_ = []
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")

@@ -6,9 +6,12 @@ Interface:
                                history_width_80=None) -> dict
     compare_quantile_forecasts(y, q_candidate, q_benchmark, *, horizon, ...) -> TestResult
     prob_up_from_quantiles(quantiles) -> np.ndarray
-    pinball_loss(y, quantiles) -> np.ndarray            (per-row mean over levels)
+    pinball_loss(y, quantiles) -> np.ndarray            (per-row mean over levels; NaN rows kept)
     kupiec_test(hits, alpha), christoffersen_test(hits), conditional_coverage_test(hits, alpha)
-    build_unified_decision_card(quantiles_by_horizon, *, point_forecast_h1=None) -> pd.DataFrame
+    build_unified_decision_card(quantiles_by_horizon, *, model_by_horizon=None,
+                                point_forecast_h1=None,
+                                history_width_80_by_horizon=None) -> pd.DataFrame
+                                (raises ValueError if < 60 earlier widths to rank a regime)
 
 ``quantiles`` is a DataFrame whose columns are probability levels (floats), aligned with y.
 
@@ -16,7 +19,8 @@ Conventions:
 * Intervals: 80% = [q0.10, q0.90], 95% = [q0.025, q0.975].
 * Overlapping h-step targets: coverage, width and pinball use every origin; the
   Kupiec / Christoffersen / Conditional Coverage tests use the non-overlapping subsample
-  (every h-th origin), because consecutive misses of overlapping targets are the same shock.
+  (origins at positions 0, h, 2h, ... of the input, unaffected by dropped rows), because
+  consecutive misses of overlapping targets are the same shock.
 * Risk labels are based on the forecast 80% width ranked against *past* forecasts only
   (seeded expanding percentile or rolling 252-session window), so they are usable in real time.
 """
@@ -33,27 +37,46 @@ Z80 = float(stats.norm.ppf(0.9))
 INTERVALS = {"80": (0.1, 0.9), "95": (0.025, 0.975)}
 
 
-def _prep(y, quantiles: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    levels = np.array(sorted(float(c) for c in quantiles.columns))
-    q = quantiles[[c for c in sorted(quantiles.columns, key=float)]].to_numpy(dtype=float)
+def _ordered(quantiles: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """(levels ascending, quantile matrix with columns in that order)."""
+    cols = sorted(quantiles.columns, key=float)
+    return np.array([float(c) for c in cols]), quantiles[cols].to_numpy(dtype=float)
+
+
+def _paired(y, quantiles: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    levels, q = _ordered(quantiles)
     yy = np.asarray(y, dtype=float)
     if len(yy) != len(q):
         raise ValueError("y and quantiles must have the same length.")
+    return yy, q, levels
+
+
+def _prep(y, quantiles: pd.DataFrame, horizon: int = 1) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Drop rows with a missing actual or quantile.
+
+    Also returns a mask (over the kept rows) of the non-overlapping origins: original
+    positions 0, h, 2h, ... so a dropped row never shifts the evaluation grid.
+    """
+    yy, q, levels = _paired(y, quantiles)
     ok = np.isfinite(yy) & np.isfinite(q).all(axis=1)
-    return yy[ok], q[ok], levels
+    on_grid = (np.arange(len(yy)) % horizon == 0)[ok]
+    return yy[ok], q[ok], levels, on_grid
 
 
 def pinball_loss(y, quantiles: pd.DataFrame) -> np.ndarray:
-    """Per-row pinball (quantile) loss averaged over levels (≈ CRPS / 2)."""
-    yy, q, levels = _prep(y, quantiles)
+    """Per-row pinball (quantile) loss averaged over levels (≈ CRPS / 2).
+
+    Row-aligned with the inputs: rows with a missing actual or quantile get NaN, so
+    loss series of two models can be paired origin-by-origin before dropping gaps.
+    """
+    yy, q, levels = _paired(y, quantiles)
     u = yy[:, None] - q
     return np.mean(np.maximum(levels * u, (levels - 1.0) * u), axis=1)
 
 
 def prob_up_from_quantiles(quantiles: pd.DataFrame) -> np.ndarray:
     """P(y > 0) by linear interpolation of the forecast CDF through the quantiles."""
-    levels = np.array(sorted(float(c) for c in quantiles.columns))
-    q = quantiles[[c for c in sorted(quantiles.columns, key=float)]].to_numpy(dtype=float)
+    levels, q = _ordered(quantiles)
     lo_tail, hi_tail = levels[0] / 2.0, (1.0 + levels[-1]) / 2.0
     cdf0 = np.array([
         lo_tail if 0.0 < row[0] else hi_tail if 0.0 > row[-1]
@@ -167,7 +190,7 @@ def evaluate_quantile_forecast(
     probability-of-increase Brier score and log-loss (plus Brier skill vs ``p_up_reference``),
     Mincer-Zarnowitz R2, and risk-discrimination statistics (both expanding and rolling 252d).
     """
-    yy, q, levels = _prep(y, quantiles)
+    yy, q, levels, on_grid = _prep(y, quantiles, horizon)
     n = len(yy)
     col = {float(lv): i for i, lv in enumerate(levels)}
     out: dict = {"n": n}
@@ -178,7 +201,7 @@ def evaluate_quantile_forecast(
         miss = (yy < lo) | (yy > hi)
         width = hi - lo
         winkler = width + (2.0 / alpha) * ((lo - yy) * (yy < lo) + (yy - hi) * (yy > hi))
-        sub = miss[::horizon]
+        sub = miss[on_grid]
         out[f"coverage_{name}"] = float(1.0 - miss.mean())
         out[f"width_{name}"] = float(width.mean())
         out[f"winkler_{name}"] = float(winkler.mean())
@@ -264,13 +287,20 @@ def build_unified_decision_card(
     *,
     model_by_horizon: dict[str, str] | None = None,
     point_forecast_h1: float | None = None,
+    history_width_80_by_horizon: dict[str, np.ndarray] | None = None,
 ) -> pd.DataFrame:
     """Build the operational Unified Multi-Horizon Decision Card at the latest forecast origin.
 
     Combines short-horizon point forecast (if provided) with 80%/95% intervals, median,
     probability of increase, Upside/Downside 95% Tail VaR, and Ex-Ante Risk Regime label
     across 1-day, 1-week, and 1-month horizons.
+
+    The regime is the percentile of the latest 80% width among all *earlier* widths,
+    seeded with ``history_width_80_by_horizon[h]`` (ex-ante widths forecast before the
+    OOS window) so calm periods are judged against history, not against themselves.
+    Raises ValueError if fewer than 60 earlier widths exist for a horizon.
     """
+    seeds = history_width_80_by_horizon or {}
     default_models = {"daily": "Q3", "weekly": "Q3", "monthly": "Q2"}
     model_map = {**default_models, **(model_by_horizon or {})}
     rows = []
@@ -279,8 +309,12 @@ def build_unified_decision_card(
         col_map = {float(str(c).lstrip("q")): c for c in q_cols}
         q_clean = df_q[q_cols].rename(columns={v: k for k, v in col_map.items()})
         w80 = (q_clean[0.9] - q_clean[0.1]).to_numpy(dtype=float)
-        ranks = _expanding_rank(w80)
-        last_rank = float(ranks[-1]) if np.isfinite(ranks[-1]) else 0.5
+        last_rank = float(_expanding_rank(w80, history_seed=seeds.get(hname))[-1])
+        if not np.isfinite(last_rank):
+            raise ValueError(
+                f"Not enough width history to rank the '{hname}' risk regime; pass "
+                "history_width_80_by_horizon with ex-ante widths from before the OOS window."
+            )
         regime = "CAO (High)" if last_rank >= 0.75 else "THẤP (Low)" if last_rank <= 0.25 else "TRUNG BÌNH (Normal)"
         p_up = float(prob_up_from_quantiles(q_clean.iloc[[-1]])[0])
         last = q_clean.iloc[-1]

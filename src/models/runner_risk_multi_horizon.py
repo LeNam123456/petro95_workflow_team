@@ -49,6 +49,21 @@ logger = logging.getLogger("SPAFS_V5.2.RiskRunner")
 
 HORIZONS = (("daily", 1, 0), ("weekly", 5, 2), ("monthly", 21, 5))
 REFIT_EVERY = 20
+# Ex-ante risk-regime seed (spec, problem 4): the walk-forward starts as early in the training
+# period as MIN_SEED_TRAIN purged rows allow, so the 80% widths forecast before the OOS window
+# cover the whole history (calm and crisis years), not only the year just before it.
+MIN_SEED_TRAIN = 504  # ~2 trading years: enough to estimate GARCH(1,1)-t at the first seed origin
+
+
+def regime_seed_start(oos_start: int, horizon: int, embargo: int) -> int:
+    """Earliest walk-forward origin with >= MIN_SEED_TRAIN purged training rows.
+
+    Kept a whole number of REFIT_EVERY steps before ``oos_start`` so the refit grid (and
+    therefore every OOS forecast) is identical to a run that starts at ``oos_start``.
+    """
+    earliest = MIN_SEED_TRAIN - 1 + horizon + embargo
+    steps = max(0, (oos_start - earliest) // REFIT_EVERY)
+    return oos_start - steps * REFIT_EVERY
 DATASETS = {
     "stream2": {"path": "data/processed/stream2_multi_horizon_2017_2025.parquet", "oos_start": 1500},
     "stream1": {"path": "data/processed/stream1_econometric_2008_2025.parquet", "oos_start_date": "2012-01-03"},
@@ -86,7 +101,7 @@ def run_dataset(name: str, out_root: Path, models=RISK_MODEL_IDS) -> pd.DataFram
     df, cfg = load_dataset(name)
     out_dir = out_root / name
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows, dm_rows, timings, best_quantiles = [], [], {}, {}
+    rows, dm_rows, timings, best_quantiles, best_seed_widths = [], [], {}, {}, {}
     rec_models = {"daily": "Q3", "weekly": "Q3", "monthly": "Q2"}
 
     for hname, h, emb in HORIZONS:
@@ -97,21 +112,26 @@ def run_dataset(name: str, out_root: Path, models=RISK_MODEL_IDS) -> pd.DataFram
         logger.info("[%s/%s] h=%d embargo=%d  OOS %s -> %s (N=%d)", name, hname, h, emb,
                     X.index[start].date(), X.index[-1].date(), len(y) - start)
 
+        seed_start = regime_seed_start(start, h, emb)
         preds = {}
         for mid in models:
             t0 = time.time()
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                out = run_walk_forward_quantiles(lambda m=mid: make_risk_model(m, h), X, y,
-                                                 initial_train_size=start, refit_every=REFIT_EVERY,
-                                                 horizon=h, embargo=emb)
+                full = run_walk_forward_quantiles(lambda m=mid: make_risk_model(m, h), X, y,
+                                                  initial_train_size=seed_start, refit_every=REFIT_EVERY,
+                                                  horizon=h, embargo=emb)
             timings[f"{hname}/{mid}"] = round(time.time() - t0, 1)
+            seed, out = full.iloc[: start - seed_start], full.iloc[start - seed_start :]
+            seed_widths = (seed[0.9] - seed[0.1]).to_numpy(dtype=float)
             preds[mid] = out[list(LEVELS)]
             out.rename(columns={lv: f"q{lv:g}" for lv in LEVELS}).to_csv(
                 out_dir / f"quantiles_{mid}_{hname}.csv", index_label="market_date")
             if mid == rec_models.get(hname):
                 best_quantiles[hname] = out
-            met = evaluate_quantile_forecast(out["actual_return"], preds[mid], horizon=h, p_up_reference=clim_up)
+                best_seed_widths[hname] = seed_widths
+            met = evaluate_quantile_forecast(out["actual_return"], preds[mid], horizon=h,
+                                             p_up_reference=clim_up, history_width_80=seed_widths)
             rows.append({"dataset": name, "horizon": hname, "h": h, "model_id": mid,
                          "model": MODEL_DESCRIPTIONS[mid], "oos_start": str(X.index[start].date()),
                          "climatology_p_up": clim_up, **met})
@@ -136,13 +156,15 @@ def run_dataset(name: str, out_root: Path, models=RISK_MODEL_IDS) -> pd.DataFram
     lead.to_json(out_dir / "leaderboard.json", orient="records", indent=2)
     pd.DataFrame(dm_rows).to_csv(out_dir / "dm_pinball_tests.csv", index=False)
     if best_quantiles:
-        card = build_unified_decision_card(best_quantiles, model_by_horizon=rec_models)
+        card = build_unified_decision_card(best_quantiles, model_by_horizon=rec_models,
+                                           history_width_80_by_horizon=best_seed_widths)
         card.to_csv(out_dir / "decision_card.csv", index=False)
     data_path = PROJECT_ROOT / cfg["path"]
     manifest = {
         "dataset": name, "data_path": cfg["path"],
         "data_sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
         "levels": list(LEVELS), "refit_every": REFIT_EVERY,
+        "regime_seed_min_train_rows": MIN_SEED_TRAIN,
         "horizons": [{"name": n, "h": h, "embargo": e} for n, h, e in HORIZONS],
         "models": {m: MODEL_DESCRIPTIONS[m] for m in models}, "timings_sec": timings,
         "executed_utc": pd.Timestamp.now(tz="UTC").isoformat(),

@@ -231,3 +231,90 @@ def test_build_unified_decision_card():
     assert card.loc[0, "point_forecast_pct"] == pytest.approx(0.45)
     assert card.loc[0, "ex_ante_risk_regime"] == "CAO (High)"
 
+
+
+# --------------------------------------------------------------------------- missing rows, regime seeding, Q0 benchmark, arch-free GARCH
+def test_compare_drops_missing_rows_jointly_not_per_forecast():
+    """A NaN in one model's row must remove that row from BOTH loss series, so the
+    DM test compares the two models on identical origins (not shifted rows)."""
+    rng = np.random.default_rng(3)
+    sd = np.exp(rng.normal(0, 0.6, 400))
+    y = sd * rng.standard_normal(400)
+    good = _normal_quantiles(np.zeros(400), sd)
+    bad = _normal_quantiles(np.zeros(400), np.full(400, sd.mean()))
+    good_gappy = good.copy()
+    good_gappy.iloc[10] = np.nan
+    bad_gappy = bad.copy()
+    bad_gappy.iloc[200] = np.nan
+    keep = np.ones(400, dtype=bool)
+    keep[[10, 200]] = False
+    expected = compare_quantile_forecasts(y[keep], good[keep].reset_index(drop=True),
+                                          bad[keep].reset_index(drop=True), horizon=1)
+    got = compare_quantile_forecasts(y, good_gappy, bad_gappy, horizon=1)
+    assert got.sample_size == 398
+    assert got.statistic == pytest.approx(expected.statistic)
+
+
+def test_non_overlapping_subsample_keeps_original_origin_grid_when_rows_are_missing():
+    """Coverage tests use every h-th ORIGIN; a missing row must not shift that grid."""
+    h, n = 5, 500
+    q = _normal_quantiles(np.zeros(n), np.ones(n))  # 80% interval ~ [-1.28, 1.28]
+    y = np.zeros(n)
+    y[1::h] = 5.0          # misses only on origins that are NOT on the 0, h, 2h, ... grid
+    y[0] = np.nan          # first origin unrealised
+    res = evaluate_quantile_forecast(y, q, horizon=h)
+    assert res["n_independent_80"] == 99       # origins 5, 10, ..., 495
+    assert res["kupiec_p_80"] == pytest.approx(kupiec_test(np.zeros(99), 0.2)[1])
+
+
+def _calm_quantiles(n=20):
+    q = _normal_quantiles(np.zeros(n), np.full(n, 0.5))
+    q.index = pd.date_range("2024-01-01", periods=n, freq="B")
+    return q
+
+
+def test_decision_card_ranks_calm_origin_against_seeded_crisis_history():
+    """Problem 4 of the spec: a calm regime must be ranked against historical widths,
+    not against itself, and be labelled from the very first OOS origin."""
+    crisis_widths = 2 * stats.norm.ppf(0.9) * np.linspace(1.0, 3.0, 300)
+    card = build_unified_decision_card(
+        {"daily": _calm_quantiles()},
+        history_width_80_by_horizon={"daily": crisis_widths},
+    )
+    assert card.loc[0, "ex_ante_risk_regime"] == "THẤP (Low)"
+    assert card.loc[0, "risk_regime_percentile"] == pytest.approx(0.0)
+
+
+def test_decision_card_refuses_to_guess_a_regime_without_enough_history():
+    with pytest.raises(ValueError, match="history"):
+        build_unified_decision_card({"daily": _calm_quantiles()})
+
+
+def test_q0_is_the_unweighted_full_history_benchmark():
+    """US9: Q0 uses every training target equally (no burn-in, no time decay)."""
+    X, r = _garch_sample(n=600)
+    y = pd.Series(np.r_[np.full(100, 8.0), r[100:500]], index=X.index[:500])  # early crisis rows
+    m = make_risk_model("Q0", 1).fit(X.iloc[:500], y)
+    got = m.predict_quantiles(X.iloc[500:503]).to_numpy()
+    expected = np.quantile(y.to_numpy(), LEVELS)
+    assert np.allclose(got, np.tile(expected, (3, 1)))
+
+
+@pytest.mark.parametrize("mid", ["Q2", "Q3"])
+def test_garch_models_work_without_the_arch_library(mid, monkeypatch):
+    """US10: the self-contained Student-t GARCH(1,1) MLE keeps Q2/Q3 calibrated and
+    better than constant risk in a minimal environment."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "arch", None)  # `from arch import ...` -> ImportError
+    X, r = _garch_sample(seed=5)
+    y = _h_target(r, 1, X.index).dropna()
+    X = X.loc[y.index]
+    res = {}
+    for m in ("Q0", mid):
+        out = run_walk_forward_quantiles(lambda m=m: make_risk_model(m, 1), X, y,
+                                         initial_train_size=1600, refit_every=100)
+        res[m] = evaluate_quantile_forecast(out["actual_return"], out[list(LEVELS)], horizon=1)
+    assert 0.75 <= res[mid]["coverage_80"] <= 0.85
+    assert res[mid]["pinball"] < res["Q0"]["pinball"]
+    assert res[mid]["risk_ratio_high_low"] > 1.5
