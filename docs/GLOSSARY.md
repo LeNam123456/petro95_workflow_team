@@ -1,111 +1,77 @@
-# SPAFS V5.2 — Hướng 4 (Multi-Horizon Interval & Risk Forecasting)
+# GLOSSARY.md — Thuật ngữ Dự án Mogas 95
 
-Hệ thống dự báo khoảng dao động, phân vị lợi suất và phân tầng rủi ro đa kỳ hạn (1 ngày, 1 tuần, 1 tháng) cho chuẩn giá xăng thành phẩm bán buôn Platts FOB Singapore Mogas 95, kết hợp dự báo điểm ngắn hạn và quản trị dữ liệu Point-in-Time nghiêm ngặt.
+Tài liệu định nghĩa từ vựng chuẩn (Ubiquitous Language) của repository `Petro_95`. Phần 1 là ngôn ngữ chuẩn mực của nhánh hiện tại `feature/traditional-deep-learning-pipeline`. Phần 2 là di sản của dự án cũ SPAFS V5.2 để tham chiếu lịch sử.
 
-## 1. Thị trường & Chuẩn giá Lọc hóa dầu (Market & Benchmark Assessment)
+---
 
-**Platts Mogas 95 Assessment (MG95)**:
-Chỉ số đánh giá giá chuẩn bán buôn xăng RON 95 FOB Singapore do S&P Global Platts công bố vào cuối phiên Market-on-Close (16:30 SGT), đại diện cho các lô hàng giao nhận từ 15 đến 30 ngày tới.
-_Avoid_: Giá giao dịch vật lý giao ngay tại cổng nhà máy, giá bán lẻ xăng dầu nội địa, spot physical transaction price.
+# PHẦN 1: TRADITIONAL FORECASTING PIPELINE (REVISED MVP — ACTIVE)
+*Tài liệu đặc tả chi phối: `docs/PROBLEM_DEFINITION_AND_METHODOLOGY_REVISED.md`*
 
-**ICE Brent Futures (Brent)**:
-Giá thanh toán hợp đồng tương lai dầu thô chuẩn quốc tế ICE Brent chốt phiên tại London/New York (~02:30–03:30 SGT sáng hôm sau), đóng vai trò biến nguyên liệu đầu vào dẫn dắt qua đêm (overnight lead) cho thị trường Singapore.
-_Avoid_: Giá dầu thô giao ngay (dated Brent spot), WTI.
+## 1. Dữ liệu & Quản trị Thời gian (Data & Point-in-Time Governance)
 
-**Refining Spread (Biên giá liên sản phẩm & lọc dầu)**:
-Chênh lệch giá giữa xăng MG95 và các sản phẩm/nguyên liệu liên quan tại cùng thời điểm hợp lệ, bao gồm Octane Spread ($\text{MG95} - \text{MG92}$), Diesel Spread ($\text{MG95} - \text{Gasoil 0.05\%}$), và Gasoline-Brent Crack Spread ($\text{MG95} - \text{Brent}$).
-_Avoid_: Biên lợi nhuận ròng kế toán của nhà máy lọc dầu.
+**Forecast Origin ($o$ / 08:30 SGT Cutoff)**:
+Mốc thời gian phát lệnh dự báo chuẩn lúc 08:30 sáng giờ Singapore (`Asia/Singapore`, UTC+8). Mọi thông tin đầu vào phải được công bố và khả dụng trước mốc này ($\text{feature\_available\_at} \le \text{forecast\_origin}$).
+_Avoid_: Giờ chốt phiên Mogas (16:30 SGT), giờ đóng cửa cuối ngày, thời điểm chạy script thực tế.
 
-**Lagged Equilibrium Spread ($\text{Spread}_{t-1}$)**:
-Chênh lệch giá trễ 1 phiên giữa MG95 và dầu thô Brent, đóng vai trò mỏ neo cân bằng dài hạn trong mô hình lợi suất dừng $I(0)$ mà không cần dùng cơ chế hiệu chỉnh sai số (ECM) trên chuỗi giá gốc.
-_Avoid_: Phần dư đồng liên kết (cointegration residual) ước lượng trên toàn mẫu.
+**Point-in-Time (PIT) Rule**:
+Ràng buộc thời gian bắt buộc: chỉ sử dụng thông tin đã thực sự khả dụng tại thời điểm phát sinh dự báo. Pipeline chỉ được công nhận Zero Lookahead Bias khi vượt qua automated PIT check có lưu metadata.
+_Avoid_: Ghép dữ liệu chỉ dựa trên ngày lịch mà bỏ qua độ trễ công bố (Calendar-only alignment).
 
-## 2. Quản trị Thời gian & Khung Dữ liệu (Point-in-Time & Sample Governance)
+**Canonical Market Panel**:
+Tệp dữ liệu sạch nguồn bất biến (`data/interim/canonical_market_panel.parquet`, 4,428 phiên giao dịch từ 2008–2025, 0 missing values), kết hợp giá Platts Mogas 95 (`MG95`) và Dầu thô Brent (`brent_close`).
+_Avoid_: Tự ý sửa đổi, ghi đè hoặc xáo trộn thứ tự thời gian của tệp dữ liệu gốc.
 
-**Forecast Origin ($\tau$ / 08:30 SGT Cutoff)**:
-Mốc thời gian khóa sổ thông tin cứng lúc 08:30 sáng giờ Singapore của ngày dự báo; chỉ những dữ liệu đã xuất bản và khả dụng trước hoặc tại mốc này mới được phép đi vào tập đặc trưng.
-_Avoid_: Giờ đóng cửa cuối ngày (end-of-day cutoff), thời điểm chạy code thực tế.
+**Sequential 70/15/15 Split**:
+Phương thức phân chia chuỗi thời gian tuần tự không xáo trộn: 70% Train (3,099 dòng, 2008–2020), 15% Validation (664 dòng, 2021–2023), 15% Test (665 dòng, 2023–2025) theo ADR-0006. Tên tệp mang tính đại diện giai đoạn thị trường.
+_Avoid_: Random K-fold CV, Shuffled Split.
 
-**Horizon Return ($r_{t,h}$ / Lợi suất kỳ hạn $h$ phiên)**:
-Tổng lợi suất logarit cộng dồn trong $h$ phiên giao dịch kế tiếp tính từ phiên gốc, với $h \in \{1, 5, 21\}$ tương ứng kỳ hạn 1 ngày, 1 tuần giao dịch và 1 tháng giao dịch.
-_Avoid_: Mức giá danh nghĩa tương lai ($P_{t+h}$), lợi suất tính theo ngày lịch dương (calendar days).
+**Lookback Window ($L=30$)**:
+Cửa sổ lịch sử gồm đúng 30 phiên giao dịch gần nhất khả dụng tính đến thời điểm $o$. Cho phép lấy tối đa 29 phiên của cuối partition trước làm context lịch sử cho các mẫu đầu của Validation và Test mà không vi phạm PIT.
+_Avoid_: Cắt bỏ máy móc 29 dòng đầu của Val/Test, Lookback linh hoạt không cố định trong MVP.
 
-**Purge Gap ($h$) & Embargo ($E$)**:
-Khoảng cách an toàn bắt buộc trong đánh giá Walk-Forward: tại mốc dự báo $\tau$, tập huấn luyện chỉ được phép dùng các quan sát tới $t \le \tau - h - E$ để đảm bảo nhãn lợi suất $h$ phiên đã hoàn toàn hiện thực hóa và triệt tiêu rò rỉ tự tương quan.
-_Avoid_: Chia tập train/test ngẫu nhiên (random K-fold), cửa sổ trượt không cắt bỏ nhãn chồng lấp (unpurged rolling window).
+## 2. Mục tiêu Dự báo & Biểu diễn (Target Representation)
 
-**Stream 2 (Primary Aligned Sample, 2017–2025)**:
-Tập dữ liệu chính có giai đoạn kiểm tra ngoài mẫu từ 28/12/2022 đến 29/12/2025, dùng để đối chiếu trực tiếp giữa hệ thống mô hình điểm ($M0a\text{–}M5$, Deep Learning) và hệ thống mô hình khoảng/rủi ro ($Q0\text{–}Q4$).
-_Avoid_: Tập dữ liệu duy nhất để kết luận về năng lực phân biệt khủng hoảng.
+**Relative Change ($R_{o,h}$ — Phương pháp chính)**:
+Tỷ lệ biến động tương đối tích lũy từ mức giá Mogas gần nhất tại forecast origin đến mức giá ở kỳ hạn $h$:
+$$R_{o,h} = \frac{P^M_{o+h} - P^M_o}{P^M_o}$$
+_Avoid_: Log-return ($\ln(P_{t+h}/P_t)$), chênh lệch giá tuyệt đối thô ($P_{t+h} - P_t$).
 
-**Stream 1 (Long-Horizon Robustness Sample, 2008–2025)**:
-Tập dữ liệu lịch sử dài hạn có giai đoạn kiểm tra ngoài mẫu 14 năm (2012–2025) bao hàm các đợt khủng hoảng lớn (2014–2015, COVID-19 2020, xung đột 2022), bắt buộc dùng để kiểm định khả năng phân biệt chế độ rủi ro cao/thấp.
-_Avoid_: Tập dữ liệu phụ không bắt buộc.
+**Local Window Normalization ($z^{(j)}_{o,k}$)**:
+Phương pháp chuẩn hóa cục bộ từng chuỗi đầu vào theo chính giá trị gần nhất khả dụng của nó tại origin:
+$$z^{(j)}_{o,k} = \frac{P^{(j)}_{o-k}}{P^{(j)}_o} - 1 \quad (k=0, \dots, L-1)$$
+Giúp triệt tiêu xu thế trôi giá, ngăn ngừa hoàn toàn bão hòa đạo hàm tại các cổng Tanh/Sigmoid của LSTM/GRU.
+_Avoid_: Global MinMaxScaler tính trên toàn tập mà không có cơ chế thích ứng biến động ngoài Train.
 
-## 3. Dự báo Khoảng, Phân vị & Rủi ro — Trọng tâm Hướng 4 (Interval, Quantile & Risk)
+**Price Level ($y_{o,h} = P^M_{o+h}$ — Ablation đối chứng)**:
+Dự báo trực tiếp mức giá danh nghĩa trong tương lai, sử dụng scaler fit độc quyền trên tập Train, không clipping tập Test.
+_Avoid_: Coi Price Level là phương pháp chính của đề tài.
 
-**Quantile Forecast (Dự báo phân vị)**:
-Bộ 9 mức phân vị có điều kiện ($2.5\%, 5\%, 10\%, 25\%, 50\%, 75\%, 90\%, 95\%, 97.5\%$) của lợi suất kỳ hạn $h$ phiên được sắp xếp không giảm (non-crossing), phản ánh toàn bộ hình dạng phân phối dự báo tại mốc $\tau$.
-_Avoid_: Dự báo điểm cộng trừ biên độ cố định.
+**Target Reconstruction (Tái lập mức giá)**:
+Công thức khôi phục giá dự báo về đơn vị chuẩn USD/thùng từ tỷ lệ biến động tương đối:
+$$\hat{P}^M_{o+h} = P^M_o (1 + \hat{R}_{o,h})$$
+_Avoid_: Tính toán sai số MAE/RMSE trực tiếp trên không gian phần trăm mà chưa tái lập về USD/thùng.
 
-**Prediction Interval (Khoảng dự báo 80% và 95%)**:
-Biên độ dao động kỳ vọng của lợi suất kỳ hạn $h$ phiên, được trích xuất trực tiếp từ cặp phân vị $[q_{0.10}, q_{0.90}]$ (khoảng 80%) và $[q_{0.025}, q_{0.975}]$ (khoảng 95%).
-_Avoid_: Khoảng tin cậy của tham số hồi quy (parameter confidence interval).
+## 3. Kiến trúc Đa kỳ hạn & Mô hình (Strategy & Models)
 
-**Filtered Historical Simulation (FHS)**:
-Phương pháp dựng phân vị dự báo bằng cách chuẩn hóa lợi suất lịch sử trong tập huấn luyện theo độ biến động dự báo tương ứng ($z_t = y_t / \hat{\sigma}_{h,t}$), sau đó nhân các phân vị thực nghiệm (có trọng số mũ giảm dần theo thời gian / time-decayed để thích ứng với chế độ biến động gần đây) của $z$ với độ biến động dự báo hiện tại $\hat{\sigma}_{h,\tau}$ nhằm bảo toàn đuôi dày (fat tails) và độ lệch thực tế.
-_Avoid_: Khoảng dự báo giả định phân phối chuẩn Gaussian đóng ($\pm 1.28\sigma$).
+**Direct Multi-Horizon Strategy**:
+Chiến lược dự báo trực tiếp: huấn luyện mô hình độc lập cho từng kỳ hạn riêng rẽ ($h \in \{1, 5, 21\}$).
+_Avoid_: Mô hình Joint/MIMO đa đầu ra trong phạm vi MVP (tránh nhiễu kỳ hạn dài $h=21$ chi phối loss của $h=1$).
 
-**Conditional Location–Scale Decomposition (Phân rã Vị trí – Quy mô Có điều kiện)**:
-Kiến trúc mô hình phân vị lai ghép (áp dụng trong `Q3`), trong đó thành phần dịch chuyển vị trí (Location) được dẫn dắt bởi truyền dẫn lợi suất dầu thô Brent qua đêm và chênh lệch giá trễ, còn thành phần co giãn biên độ (Scale) được neo theo căn bậc hai phương sai dự báo $h$ bước của GARCH(1,1)-t để vừa thu hẹp khoảng dự báo vừa chống trượt dồn cục trong khủng hoảng.
-_Avoid_: Hồi quy phân vị tuyến tính chỉ dùng biên độ tĩnh hoặc biến động EWMA đơn thuần.
+**Naive Persistence Baseline**:
+Mô hình đường cơ sở bắt buộc: dự báo mức giá tương lai tại $o+h$ bằng chính mức giá gần nhất khả dụng tại $o$: $\hat{P}^M_{o+h} = P^M_o$. Mọi mô hình ML/DL đều phải so sánh trực tiếp với benchmark này.
+_Avoid_: Moving Average đơn giản, Random Walk không mốc neo.
 
-**Conformal Quantile Regression (CQR)**:
-Cơ chế hiệu chỉnh độ rộng khoảng dự báo phi tham số bằng cách dùng tập hiệu chỉnh tách biệt ở cuối cửa sổ huấn luyện (đã trừ khoảng purge $h$, ưu tiên cửa sổ hiệu chỉnh gần nhất) để nới hoặc co biên phân vị sao cho đạt tỷ lệ bao phủ mục tiêu.
-_Avoid_: Hiệu chỉnh hậu kiểm trên tập kiểm tra ngoài mẫu (test-set post-hoc tuning).
+**Directional Accuracy (DA)**:
+Tỷ lệ phần trăm dự báo đúng chiều hướng tăng/giảm so với phiên $t$ hiện tại, tính theo hàm dấu 3 trạng thái $\operatorname{sgn}(\Delta P) \in \{-1, 0, 1\}$. Nếu thực tế đứng giá ($\Delta P = 0$), dự báo chỉ đúng khi mô hình cũng dự báo đứng giá.
+_Avoid_: Giả định ngầm ngưỡng 50% là ngẫu nhiên đối với phân phối không cân bằng, thay đổi quy tắc tính sau khi xem tập Test.
 
-**Probability of Increase ($P(\text{tăng})$)**:
-Xác suất lợi suất kỳ hạn $h$ phiên mang dấu dương ($P(r_{t,h} > 0)$), được suy ra nhất quán bằng nội suy tuyến tính hàm phân phối tích lũy (CDF) đi qua 9 phân vị dự báo tại ngưỡng $0\%$.
-_Avoid_: Điểm tự tin chủ quan, nhãn phân loại cứng không hiệu chỉnh xác suất.
+---
 
-**Upside & Downside Tail Risk (Rủi ro đuôi tăng giá & giảm giá)**:
-Các phân vị cực trị ở hai đầu phân phối dự báo: Upside Tail Risk ($q_{0.95}, q_{0.975}$) đo lường mức tăng giá bất lợi cho doanh nghiệp nhập khẩu xăng dầu; Downside Tail Risk ($q_{0.05}, q_{0.025}$) đo lường mức sụt giảm giá trị tồn kho cho nhà máy lọc dầu và thương nhân phân phối.
-_Avoid_: Độ lệch chuẩn đối xứng hai chiều.
+# PHẦN 2: SPAFS V5.2 (LEGACY — CHỈ ĐỂ THAM CHIẾU LỊCH SỬ)
+> [!CAUTION] Cảnh báo Di sản
+> Các thuật ngữ dưới đây thuộc về dự án cũ **SPAFS V5.2 (Hướng 4: Multi-Horizon Interval & Risk Forecasting)** theo ADR 0001–0005. **Không áp dụng các thuật ngữ và ràng buộc này cho pipeline truyền thống hiện tại.**
 
-**Unified Multi-Horizon Decision Card (Bảng Quyết định Tích hợp Đa kỳ hạn)**:
-Sản phẩm đầu ra vận hành tổng hợp tại mỗi mốc dự báo $\tau$, ghép nối dự báo điểm/hướng ngắn hạn 1 ngày của mô hình tuyến tính động $M2$ với khoảng dự báo 80%/95%, xác suất tăng $P(\text{tăng})$, rủi ro đuôi 95% và nhãn chế độ rủi ro tiền nghiệm của cả 3 kỳ hạn (1 ngày, 1 tuần, 1 tháng).
-_Avoid_: Các bảng kết quả rời rạc tách biệt giữa dự báo điểm và dự báo khoảng.
-
-**Ex-Ante Risk Regime (Nhãn mức rủi ro tiền nghiệm)**:
-Phân loại mức độ rủi ro tại thời điểm dự báo (Thấp: dưới phân vị 25%; Trung bình: 25%–75%; Cao: trên phân vị 75%) dựa trên việc xếp hạng độ rộng khoảng dự báo 80% hiện tại so với **phân phối lịch sử tiền nghiệm được khởi tạo từ tập huấn luyện và mở rộng dần qua từng phiên** (Seeded Expanding Historical Rank) hoặc cửa sổ trượt 252 phiên giao dịch trước đó.
-_Avoid_: Nhãn rủi ro hậu nghiệm tính bằng phân vị của toàn bộ chuỗi kiểm tra (in-sample / full-sample hindsight regime), hoặc xếp hạng chỉ dùng nội bộ tập kiểm tra làm mất 60 phiên đầu tiên.
-
-## 4. Đánh giá Hiệu chỉnh & Kiểm định Thống kê (Calibration & Statistical Evaluation)
-
-**Empirical Coverage (Tỷ lệ bao phủ thực tế)**:
-Tỷ lệ phần trăm số phiên ngoài mẫu mà lợi suất thực tế rơi vào bên trong khoảng dự báo 80% hoặc 95% đã công bố.
-_Avoid_: Độ chính xác phân loại hướng (directional accuracy).
-
-**Pinball Loss (Quantile Loss)**:
-Hàm mất mát bất đối xứng đo lường đồng thời độ hiệu chỉnh và độ sắc (độ hẹp) của toàn bộ 9 phân vị dự báo (xấp xỉ một nửa CRPS), đóng vai trò thước đo chính để xếp hạng các mô hình $Q0\text{–}Q4$ và kiểm định Diebold–Mariano.
-_Avoid_: Sai số bình phương trung bình (RMSE) của dự báo điểm.
-
-**Unconditional Coverage Test (Kiểm định Kupiec)**:
-Kiểm định tỷ số hợp lý (LR) đánh giá xem tần suất lợi suất thực tế trượt ra ngoài khoảng dự báo có khớp thống kê với mức ý nghĩa danh nghĩa ($20\%$ cho khoảng 80%, $5\%$ cho khoảng 95%) hay không.
-_Avoid_: Kiểm định trung bình sai số.
-
-**Independence Test (Kiểm định Christoffersen)**:
-Kiểm định chuỗi Markov bậc nhất ($LR_{ind}$) đánh giá xem các lần trượt khỏi khoảng dự báo có độc lập theo thời gian hay bị dồn cục (miss clustering) do mô hình phản ứng quá chậm khi thị trường chuyển sang khủng hoảng.
-_Avoid_: Kiểm định tự tương quan chuỗi lợi suất gốc.
-
-**Conditional Coverage Test (Kiểm định Bao phủ Có điều kiện Christoffersen $LR_{cc}$)**:
-Kiểm định hợp nhất $LR_{cc} = LR_{uc} + LR_{ind} \sim \chi^2(2)$ đánh giá đồng thời cả tính đúng đắn của tỷ lệ bao phủ vô điều kiện (Kupiec) lẫn tính độc lập không trượt dồn cục của các lần vi phạm khoảng dự báo.
-_Avoid_: Chỉ nhìn riêng lẻ Kupiec $p$-value mà bỏ qua hiện tượng trượt liên tiếp trong khủng hoảng.
-
-**Non-Overlapping Evaluation Subsample (Mẫu kiểm định không chồng lấp)**:
-Tập con lấy mỗi $h$ phiên một điểm dự báo độc lập (mỗi 5 phiên cho kỳ hạn tuần, mỗi 21 phiên cho kỳ hạn tháng) khi chạy kiểm định Kupiec và Christoffersen nhằm tránh hiện tượng một cú sốc đơn lẻ bị đếm lặp trên các cửa sổ chồng lấp.
-_Avoid_: Chạy Kupiec/Christoffersen trực tiếp trên toàn bộ các ngày chồng lấp ở kỳ hạn dài.
-
-**Risk Discrimination Ratio (Tỷ số phân biệt rủi ro Cao/Thấp)**:
-Tỷ số giữa độ lệch chuẩn lợi suất thực tế trong các phiên được mô hình gắn nhãn "Rủi ro Cao" (top 25% độ rộng dự báo) chia cho độ lệch chuẩn thực tế trong các phiên gắn nhãn "Rủi ro Thấp" (bottom 25%).
-_Avoid_: Tỷ số phương sai dự báo lý thuyết của mô hình.
+- **Horizon Return ($r_{t,h}$)**: Lợi suất logarit cộng dồn $\ln(P_{t+h}/P_t)$ cho bài toán phân vị. *(Thay thế bởi Relative Change $R_{o,h}$ trong REVISED)*.
+- **Purged Walk-Forward & Embargo**: Cơ chế cross-validation loại trừ mẫu chồng lấn cho phân vị rủi ro. *(Thay thế bởi Sequential Split 70/15/15 trong REVISED)*.
+- **Quantile Forecast ($Q0\text{–}Q4$)**: Bộ 9 mức phân vị điều kiện cho dự báo khoảng dao động. *(Không thuộc phạm vi dự báo điểm của REVISED)*.
+- **Stream 1 / Stream 2**: Các mẫu đánh giá phụ hồi cứu khủng hoảng của SPAFS V5.2.

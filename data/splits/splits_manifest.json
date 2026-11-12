@@ -1,0 +1,55 @@
+{
+  "dataset_source": "data/interim/canonical_market_panel.parquet",
+  "source_sha256": "478f9c5e3704bd0c91c8a492d3924cf55d6bc9882a5c15a64d0fb60d7374e393",
+  "total_rows": 4428,
+  "date_range": {
+    "start_date": "2008-05-02",
+    "end_date": "2025-12-30"
+  },
+  "timezone": "UTC (timestamps recorded in UTC, market cutoff interpreted in Asia/Singapore UTC+8)",
+  "forecast_origin_policy": "08:30 Asia/Singapore (mandatory rule: feature_available_at <= forecast_origin)",
+  "split_policy": "Sequential 70/15/15 index split with representative market-period file labels (ADR-0006)",
+  "partitions": {
+    "train_2008_2020": {
+      "phase_label": "Phase 1: ~2008-2020 Historical Baseline",
+      "rows": 3099,
+      "percentage": 70.0,
+      "start_date": "2008-05-02",
+      "end_date": "2020-09-16",
+      "parquet_sha256": "2c8ec50da30a3b5e41afaf1754cc4ca388b23df0582f2eca939ea0b71114725b",
+      "csv_sha256": "0dd794f357bea2521c53550b87fe8d193b3d0171c80d5c799cdea787c8f9f498",
+      "missing_mg95": 0,
+      "missing_brent": 0
+    },
+    "val_2021_2023": {
+      "phase_label": "Phase 2: ~2021-2023 Post-COVID Recovery",
+      "rows": 664,
+      "percentage": 15.0,
+      "start_date": "2020-09-17",
+      "end_date": "2023-05-09",
+      "parquet_sha256": "5eab870decf9bcd53e1917dcc327302e757390e4acf8f1b28ca2bf3f020d0712",
+      "csv_sha256": "b8cbc0b194c5cf5555a8aa35755e4abc28fc1f46e511360d35fe5c4319813aa3",
+      "missing_mg95": 0,
+      "missing_brent": 0
+    },
+    "test_2024_2025": {
+      "phase_label": "Phase 3: ~2024-2025 Recent Shocks & Final Evaluation",
+      "rows": 665,
+      "percentage": 15.0,
+      "start_date": "2023-05-10",
+      "end_date": "2025-12-30",
+      "parquet_sha256": "143631065d23f8df1fb4df141794455af1007c9df183ec0f1c72e475403b46f1",
+      "csv_sha256": "ea2985bc64777272222cfdb028aae0c63d3e94f35a2704290c293270c15a6ce5",
+      "missing_mg95": 0,
+      "missing_brent": 0
+    }
+  },
+  "audit_results": {
+    "duplicate_timestamps": 0,
+    "missing_values_mg95": 0,
+    "missing_values_brent_close": 0,
+    "pit_lookahead_violations_mg95": 0,
+    "pit_lookahead_violations_brent": 0,
+    "zero_lookahead_bias_audit_passed": true
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "pipeline": "Mogas 95 Walking Skeleton Pipeline",
+  "benchmark_stage": "Stage 3 - Naive Persistence Baseline",
+  "splits_integrity": {
+    "all_valid": true,
+    "source_result": {
+      "path": "data/interim/canonical_market_panel.parquet",
+      "valid": true
+    },
+    "partition_results": {
+      "train_2008_2020": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "val_2021_2023": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "test_2024_2025": {
+        "parquet_valid": true,
+        "csv_valid": true
+      }
+    }
+  },
+  "pit_audit": {
+    "passed": true,
+    "total_rows": 4428,
+    "feature_violations": 0,
+    "target_violations": 0,
+    "details": {}
+  },
+  "horizons_evaluated": [
+    1,
+    5,
+    21
+  ],
+  "test_sample_counts": {
+    "h1": 664,
+    "h5": 660,
+    "h21": 644
+  }
+}

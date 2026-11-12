@@ -1,55 +1,61 @@
 # Domain Docs
 
-How the engineering skills consume this repo's domain documentation when exploring or restructuring the SPAFS V5.2 codebase around **Hướng 4 (Dự báo khoảng dao động và rủi ro giá xăng Singapore đa kỳ hạn)**.
+How the engineering skills consume this repo's domain documentation when developing the **Pipeline Dự báo Điểm & Chiều hướng Xăng Platts Singapore Mogas 95 (Naive, XGBoost, LSTM, GRU)** on branch `feature/traditional-deep-learning-pipeline`.
 
-## Before exploring, read these
+## 1. Authoritative Specification
 
-- **`docs/GLOSSARY.md`** (canonical domain glossary for SPAFS V5.2 & Hướng 4)
-- **`docs/adr/`**: read Architectural Decision Records (ADRs) that touch the area you are about to work in before proposing changes to data pipelines, walk-forward validation, risk/quantile models (`Q0–Q4`), or evaluation metrics.
+- **`docs/PROBLEM_DEFINITION_AND_METHODOLOGY_REVISED.md`**: **The single authoritative specification** for this project (3 Research Questions RQ1–RQ3, Point-in-Time governance at 08:30 SGT, Direct Multi-Horizon Strategy for $h \in \{1, 5, 21\}$, 33 experiment matrix configurations, 4 MVP models: Naive Persistence, XGBoost, LSTM, GRU, evaluation metrics MAE, MSE, RMSE, MAPE, $R^2$, DA).
 
-If you are working in a specific layer, cross-reference:
-- `docs/adr/0001-pivot-multi-horizon-to-interval-and-risk-forecasting.md` for why multi-horizon forecasting targets intervals and risk regimes rather than point direction at weekly/monthly horizons.
-- `docs/adr/0002-shared-purged-walk-forward-and-0830-sgt-pit-governance.md` for Point-in-Time (08:30 SGT) and purged walk-forward invariants.
-- `docs/adr/0003-fhs-and-linear-quantile-regression-over-ml-for-interval-forecasts.md` for quantile model architecture (`Q0–Q4`) and frozen post-fit variance recursion state.
-- `docs/adr/0004-dual-sample-evaluation-and-non-overlapping-backtests.md` for why both Stream 2 (2023–2025) and Stream 1 (2012–2025) are mandatory and why Kupiec/Christoffersen tests subsample every $h$-th origin.
-- `docs/adr/0005-repository-restructuring-around-direction-4.md` for the target directory layout and module boundaries.
+## 2. Legacy SPAFS V5.2 Notice (Do Not Apply to Traditional Pipeline)
 
-## File structure
+> [!WARNING] Legacy Documents
+> The files `GLOSSARY.md` (and `docs/GLOSSARY.md`) as well as `docs/adr/0001–0005` belong to the legacy **SPAFS V5.2 (Hướng 4: Multi-Horizon Interval & Risk Forecasting)** project (focusing on Quantile Regimes Q0–Q4, GARCH/FHS, and asymmetric ADL).
+> 
+> **Rules for agents:**
+> - Do **not** apply ADR-0001 to ADR-0005 constraints (e.g. interval forecasting over point direction, Q0–Q4 quantile models, purged walk-forward subsampling) to this traditional deep learning pipeline.
+> - The vocabulary and constraints in `docs/PROBLEM_DEFINITION_AND_METHODOLOGY_REVISED.md` supersede legacy definitions.
+> - Any new Architectural Decision Records specific to this project should be added starting from `docs/adr/0006-...`.
 
-Single-context repo centralized under `docs/`:
+## 3. File structure
+
+Single-context repo layout under `docs/`:
 
 ```text
 /
+├── configs/
+│   ├── data.yaml
+│   ├── experiment.yaml
+│   └── models.yaml
+├── data/
+│   ├── interim/
+│   │   └── canonical_market_panel.parquet  ← Immutable dataset (4,428 sessions, 2008–2025, UTC)
+│   └── splits/                             ← Physical splits (train_2008_2020, val_2021_2023, test_2024_2025, manifest)
 ├── docs/
-│   ├── GLOSSARY.md                        ← Canonical ubiquitous language (SPAFS V5.2 & Hướng 4)
+│   ├── PROBLEM_DEFINITION_AND_METHODOLOGY_REVISED.md  ← Authoritative specification & methodology
+│   ├── GLOSSARY.md                                    ← Legacy SPAFS V5.2 glossary (reference only)
 │   ├── agents/
-│   │   ├── issue-tracker.md               ← Issue tracker & wayfinding conventions
-│   │   ├── domain.md                      ← This file: consumer rules for domain docs
-│   │   └── triage-labels.md               ← Canonical triage role labels
-│   └── adr/
-│       ├── 0001-pivot-multi-horizon-to-interval-and-risk-forecasting.md
-│       ├── 0002-shared-purged-walk-forward-and-0830-sgt-pit-governance.md
-│       ├── 0003-fhs-and-linear-quantile-regression-over-ml-for-interval-forecasts.md
-│       ├── 0004-dual-sample-evaluation-and-non-overlapping-backtests.md
-│       └── 0005-repository-restructuring-around-direction-4.md
-└── src/
-    ├── data_proccessing/                  ← Point-in-Time data foundation & feature engineering
-    └── models/
-        ├── econometric/                   ← Point baselines & asymmetric ADL (M0a–M3)
-        ├── ml/                            ← Point LightGBM models (M4–M5)
-        ├── risk/                          ← Direction 4 quantile & risk models (Q0–Q4) + figures
-        ├── validation/                    ← Shared purged/embargoed walk-forward engine
-        └── evaluation/                    ← Point & interval statistical tests (DM, Kupiec, Christoffersen)
+│   │   ├── issue-tracker.md                           ← Local Markdown Issue Tracker (.scratch/traditional-pipeline/issues/)
+│   │   ├── domain.md                                  ← This file: consumer rules for domain docs
+│   │   └── triage-labels.md                           ← Canonical triage role labels
+│   └── adr/                                           ← 0001–0005 (legacy SPAFS V5.2), 0006+ (new project)
+├── src/
+│   ├── data/                                          ← PIT alignment, validation, splitting, dataset
+│   ├── features/                                      ← Feature engineering & scaling
+│   ├── models/                                        ← Naive baseline, XGBoost, LSTM, GRU
+│   ├── training/                                      ← Trainer, callbacks, early stopping
+│   └── evaluation/                                    ← Price reconstruction, metrics, visualization
+├── experiments/
+│   └── benchmark.py                                   ← 33-configuration benchmark runner
+├── outputs/
+│   ├── checkpoints/                                   ← Checkpoints for LSTM, GRU
+│   ├── predictions/                                   ← Predictions by horizon (h=1, 5, 21)
+│   ├── figures/                                       ← Plots (actual vs predicted, confusion matrix, loss curves)
+│   ├── benchmark_leaderboard.csv                      ← 33-configuration benchmark leaderboard
+│   └── experiment_manifest.json                       ← Experiment metadata & reproducibility audit
+├── run_benchmark.py
+└── README.md
 ```
 
-## Use the glossary's vocabulary
+## 4. Use the REVISED specification vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a function signature, or a test name), use the term as defined in `docs/GLOSSARY.md`. Do not drift to synonyms the glossary explicitly avoids.
-
-If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (update `docs/GLOSSARY.md` via `/domain-modeling`).
-
-## Flag ADR conflicts
-
-If your output contradicts an existing ADR in `docs/adr/`, surface it explicitly rather than silently overriding:
-
-> _Contradicts ADR-0002 (shared purged walk-forward & 08:30 SGT cutoff), but worth reopening because…_
+When your output names a domain concept (in an issue title, a spec, a code implementation, a function signature, or a test name), use the terms defined in `docs/PROBLEM_DEFINITION_AND_METHODOLOGY_REVISED.md`.
