@@ -1,0 +1,10 @@
+# Model hyperparameters configuration for forecasting benchmark
+xgboost:
+  n_estimators: 500
+  max_depth: 4
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  early_stopping_rounds: 15
+  random_state: 42
+  eval_metric: "rmse"

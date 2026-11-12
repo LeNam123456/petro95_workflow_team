@@ -17,8 +17,8 @@ Tracker Directory: `.scratch/traditional-pipeline/issues/`
 - **ADR-0007**: XGBoost Feature Set (32 features Univariate, 64 features Multivariate, zero raw price spread), Canonical seed 42, Output schemas and checkpoint names.
 
 ## Tickets & Frontier
-- [ ] [01-naive-baseline-and-walking-skeleton.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/01-naive-baseline-and-walking-skeleton.md) — Blocked by: None *(Current Frontier)*
-- [ ] [02-xgboost-relative-change-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/02-xgboost-relative-change-benchmark.md) — Blocked by: 01
-- [ ] [03-sequence-deep-learning-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/03-sequence-deep-learning-benchmark.md) — Blocked by: 01
+- [x] [01-naive-baseline-and-walking-skeleton.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/01-naive-baseline-and-walking-skeleton.md) — Blocked by: None (Completed)
+- [x] [02-xgboost-relative-change-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/02-xgboost-relative-change-benchmark.md) — Blocked by: 01 (Completed)
+- [ ] [03-sequence-deep-learning-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/03-sequence-deep-learning-benchmark.md) — Blocked by: 01 *(Current Frontier)*
 - [ ] [04-price-level-ablation-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/04-price-level-ablation-benchmark.md) — Blocked by: 02, 03
 - [ ] [05-visualizations-manifest-and-audit.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/05-visualizations-manifest-and-audit.md) — Blocked by: 04

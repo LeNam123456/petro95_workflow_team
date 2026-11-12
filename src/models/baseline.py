@@ -41,5 +41,5 @@ class NaivePersistenceModel:
         """Generate reconstructed price level predictions in USD/barrel."""
         preds = self.predict(batch)
         if batch.target_representation == "relative_change":
-            return reconstruct_price(batch.origin_prices, preds)
+            return np.asarray(reconstruct_price(batch.origin_prices, preds), dtype=np.float64)
         return preds

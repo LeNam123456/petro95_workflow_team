@@ -1,6 +1,11 @@
 {
-  "pipeline": "Mogas 95 Walking Skeleton Pipeline",
-  "benchmark_stage": "Stage 3 - Naive Persistence Baseline",
+  "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
+  "benchmark_stage": "Stage 4 - XGBoost Relative Change Benchmark",
+  "seed": 42,
+  "models_evaluated": [
+    "naive",
+    "xgboost"
+  ],
   "splits_integrity": {
     "all_valid": true,
     "source_result": {
@@ -38,5 +43,16 @@
     "h1": 664,
     "h5": 660,
     "h21": 644
+  },
+  "hyperparameters": {
+    "xgboost": {
+      "n_estimators": 500,
+      "max_depth": 4,
+      "learning_rate": 0.05,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "early_stopping_rounds": 15,
+      "random_state": 42
+    }
   }
 }
