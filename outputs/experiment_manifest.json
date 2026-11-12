@@ -1,6 +1,7 @@
 {
   "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
   "benchmark_stage": "Stage 6 - Price Level Ablation Benchmark & Full 33-Configuration Evaluation",
+  "generated_at": "2026-11-12T07:46:11.296034+00:00",
   "seed": 42,
   "models_evaluated": [
     "naive",
@@ -12,25 +13,214 @@
     "relative_change",
     "price_level"
   ],
+  "horizons_evaluated": [
+    1,
+    5,
+    21
+  ],
   "total_configurations": 33,
-  "splits_integrity": {
-    "all_valid": true,
-    "source_result": {
+  "test_sample_counts": {
+    "h1": 664,
+    "h5": 660,
+    "h21": 644
+  },
+  "data_checksums": {
+    "source_dataset": {
       "path": "data/interim/canonical_market_panel.parquet",
-      "valid": true
+      "sha256": "478f9c5e3704bd0c91c8a492d3924cf55d6bc9882a5c15a64d0fb60d7374e393"
     },
-    "partition_results": {
+    "partitions": {
       "train_2008_2020": {
-        "parquet_valid": true,
-        "csv_valid": true
+        "rows": 3099,
+        "parquet_sha256": "2c8ec50da30a3b5e41afaf1754cc4ca388b23df0582f2eca939ea0b71114725b",
+        "csv_sha256": "0dd794f357bea2521c53550b87fe8d193b3d0171c80d5c799cdea787c8f9f498"
       },
       "val_2021_2023": {
-        "parquet_valid": true,
-        "csv_valid": true
+        "rows": 664,
+        "parquet_sha256": "5eab870decf9bcd53e1917dcc327302e757390e4acf8f1b28ca2bf3f020d0712",
+        "csv_sha256": "b8cbc0b194c5cf5555a8aa35755e4abc28fc1f46e511360d35fe5c4319813aa3"
       },
       "test_2024_2025": {
-        "parquet_valid": true,
-        "csv_valid": true
+        "rows": 665,
+        "parquet_sha256": "143631065d23f8df1fb4df141794455af1007c9df183ec0f1c72e475403b46f1",
+        "csv_sha256": "ea2985bc64777272222cfdb028aae0c63d3e94f35a2704290c293270c15a6ce5"
+      }
+    },
+    "integrity_verification": {
+      "all_valid": true,
+      "source_result": {
+        "path": "data/interim/canonical_market_panel.parquet",
+        "valid": true
+      },
+      "partition_results": {
+        "train_2008_2020": {
+          "parquet_valid": true,
+          "csv_valid": true
+        },
+        "val_2021_2023": {
+          "parquet_valid": true,
+          "csv_valid": true
+        },
+        "test_2024_2025": {
+          "parquet_valid": true,
+          "csv_valid": true
+        }
+      }
+    }
+  },
+  "proxy_availability_flag_statistics": {
+    "canonical_panel": {
+      "total_rows": 4428,
+      "publication_datetime_is_proxy": {
+        "total": 4428,
+        "true_count": 4428,
+        "false_count": 0,
+        "true_pct": 100.0,
+        "false_pct": 0.0
+      },
+      "availability_datetime_is_proxy": {
+        "total": 4428,
+        "true_count": 4428,
+        "false_count": 0,
+        "true_pct": 100.0,
+        "false_pct": 0.0
+      },
+      "brent_availability_datetime_is_proxy": {
+        "total": 4428,
+        "true_count": 4428,
+        "false_count": 0,
+        "true_pct": 100.0,
+        "false_pct": 0.0
+      },
+      "brent_calendar_exact_match": {
+        "total": 4428,
+        "true_count": 4262,
+        "false_count": 166,
+        "true_pct": 96.251,
+        "false_pct": 3.749
+      },
+      "brent_outlier_flag": {
+        "total": 4428,
+        "true_count": 2,
+        "false_count": 4426,
+        "true_pct": 0.045,
+        "false_pct": 99.955
+      }
+    },
+    "partitions": {
+      "train": {
+        "total_rows": 3099,
+        "publication_datetime_is_proxy": {
+          "total": 3099,
+          "true_count": 3099,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "availability_datetime_is_proxy": {
+          "total": 3099,
+          "true_count": 3099,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_availability_datetime_is_proxy": {
+          "total": 3099,
+          "true_count": 3099,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_calendar_exact_match": {
+          "total": 3099,
+          "true_count": 2967,
+          "false_count": 132,
+          "true_pct": 95.741,
+          "false_pct": 4.259
+        },
+        "brent_outlier_flag": {
+          "total": 3099,
+          "true_count": 2,
+          "false_count": 3097,
+          "true_pct": 0.065,
+          "false_pct": 99.935
+        }
+      },
+      "val": {
+        "total_rows": 664,
+        "publication_datetime_is_proxy": {
+          "total": 664,
+          "true_count": 664,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "availability_datetime_is_proxy": {
+          "total": 664,
+          "true_count": 664,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_availability_datetime_is_proxy": {
+          "total": 664,
+          "true_count": 664,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_calendar_exact_match": {
+          "total": 664,
+          "true_count": 647,
+          "false_count": 17,
+          "true_pct": 97.44,
+          "false_pct": 2.56
+        },
+        "brent_outlier_flag": {
+          "total": 664,
+          "true_count": 0,
+          "false_count": 664,
+          "true_pct": 0.0,
+          "false_pct": 100.0
+        }
+      },
+      "test": {
+        "total_rows": 665,
+        "publication_datetime_is_proxy": {
+          "total": 665,
+          "true_count": 665,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "availability_datetime_is_proxy": {
+          "total": 665,
+          "true_count": 665,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_availability_datetime_is_proxy": {
+          "total": 665,
+          "true_count": 665,
+          "false_count": 0,
+          "true_pct": 100.0,
+          "false_pct": 0.0
+        },
+        "brent_calendar_exact_match": {
+          "total": 665,
+          "true_count": 648,
+          "false_count": 17,
+          "true_pct": 97.444,
+          "false_pct": 2.556
+        },
+        "brent_outlier_flag": {
+          "total": 665,
+          "true_count": 0,
+          "false_count": 665,
+          "true_pct": 0.0,
+          "false_pct": 100.0
+        }
       }
     }
   },
@@ -41,36 +231,6 @@
     "target_violations": 0,
     "details": {}
   },
-  "horizons_evaluated": [
-    1,
-    5,
-    21
-  ],
-  "test_sample_counts": {
-    "h1": 664,
-    "h5": 660,
-    "h21": 644
-  },
-  "saved_checkpoints": [
-    "gru_multivariate_relative_change_h1.pt",
-    "gru_multivariate_relative_change_h21.pt",
-    "gru_multivariate_relative_change_h5.pt",
-    "gru_univariate_relative_change_h1.pt",
-    "gru_univariate_relative_change_h21.pt",
-    "gru_univariate_relative_change_h5.pt",
-    "lstm_multivariate_price_level_h1.pt",
-    "lstm_multivariate_price_level_h21.pt",
-    "lstm_multivariate_price_level_h5.pt",
-    "lstm_multivariate_relative_change_h1.pt",
-    "lstm_multivariate_relative_change_h21.pt",
-    "lstm_multivariate_relative_change_h5.pt",
-    "lstm_univariate_price_level_h1.pt",
-    "lstm_univariate_price_level_h21.pt",
-    "lstm_univariate_price_level_h5.pt",
-    "lstm_univariate_relative_change_h1.pt",
-    "lstm_univariate_relative_change_h21.pt",
-    "lstm_univariate_relative_change_h5.pt"
-  ],
   "hyperparameters": {
     "xgboost": {
       "n_estimators": 500,
@@ -100,6 +260,346 @@
       "epochs": 100,
       "early_stopping_patience": 15,
       "random_state": 42
+    }
+  },
+  "library_environment": {
+    "python_version": "3.11.9",
+    "python_full_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "python_executable": "C:\\Users\\LeeNam\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\python.exe",
+    "os": "Windows",
+    "os_release": "10",
+    "os_version": "10.0.26200",
+    "architecture": "AMD64",
+    "cpu_count": 32,
+    "libraries": {
+      "numpy": "2.4.6",
+      "pandas": "3.0.5",
+      "torch": "2.13.0+cpu",
+      "xgboost": "3.2.0",
+      "scipy": "1.17.1",
+      "sklearn": "1.9.0",
+      "matplotlib": "3.11.1",
+      "pyarrow": "25.0.1",
+      "yaml": "6.0.3"
+    },
+    "torch_acceleration": {
+      "cuda_available": false,
+      "mps_available": false,
+      "num_threads": 16
+    }
+  },
+  "execution_runtimes": {
+    "total_benchmark_runtime_seconds": 431.643,
+    "configurations": [
+      {
+        "model": "Naive",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 0.001
+      },
+      {
+        "model": "Naive",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 0.001
+      },
+      {
+        "model": "Naive",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 0.001
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "GRU",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "GRU",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "GRU",
+        "scenario": "univariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "GRU",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 1,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "GRU",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 5,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "GRU",
+        "scenario": "multivariate",
+        "target_representation": "relative_change",
+        "horizon": 21,
+        "runtime_seconds": 21.5
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 1,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 5,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 21,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 1,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 5,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "XGBoost",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 21,
+        "runtime_seconds": 0.42
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 1,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 5,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "univariate",
+        "target_representation": "price_level",
+        "horizon": 21,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 1,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 5,
+        "runtime_seconds": 24.8
+      },
+      {
+        "model": "LSTM",
+        "scenario": "multivariate",
+        "target_representation": "price_level",
+        "horizon": 21,
+        "runtime_seconds": 24.8
+      }
+    ]
+  },
+  "saved_checkpoints": [
+    "gru_multivariate_relative_change_h1.pt",
+    "gru_multivariate_relative_change_h21.pt",
+    "gru_multivariate_relative_change_h5.pt",
+    "gru_univariate_relative_change_h1.pt",
+    "gru_univariate_relative_change_h21.pt",
+    "gru_univariate_relative_change_h5.pt",
+    "lstm_multivariate_price_level_h1.pt",
+    "lstm_multivariate_price_level_h21.pt",
+    "lstm_multivariate_price_level_h5.pt",
+    "lstm_multivariate_relative_change_h1.pt",
+    "lstm_multivariate_relative_change_h21.pt",
+    "lstm_multivariate_relative_change_h5.pt",
+    "lstm_univariate_price_level_h1.pt",
+    "lstm_univariate_price_level_h21.pt",
+    "lstm_univariate_price_level_h5.pt",
+    "lstm_univariate_relative_change_h1.pt",
+    "lstm_univariate_relative_change_h21.pt",
+    "lstm_univariate_relative_change_h5.pt"
+  ],
+  "artifacts": {
+    "leaderboard": "benchmark_leaderboard.csv",
+    "predictions": [
+      "predictions/predictions_h1.csv",
+      "predictions/predictions_h5.csv",
+      "predictions/predictions_h21.csv"
+    ],
+    "figures": [
+      "figures/actual_vs_predicted_h1.png",
+      "figures/actual_vs_predicted_h5.png",
+      "figures/actual_vs_predicted_h21.png",
+      "figures/directional_confusion_matrix.png",
+      "figures/loss_curves.png"
+    ],
+    "checkpoints": [
+      "gru_multivariate_relative_change_h1.pt",
+      "gru_multivariate_relative_change_h21.pt",
+      "gru_multivariate_relative_change_h5.pt",
+      "gru_univariate_relative_change_h1.pt",
+      "gru_univariate_relative_change_h21.pt",
+      "gru_univariate_relative_change_h5.pt",
+      "lstm_multivariate_price_level_h1.pt",
+      "lstm_multivariate_price_level_h21.pt",
+      "lstm_multivariate_price_level_h5.pt",
+      "lstm_multivariate_relative_change_h1.pt",
+      "lstm_multivariate_relative_change_h21.pt",
+      "lstm_multivariate_relative_change_h5.pt",
+      "lstm_univariate_price_level_h1.pt",
+      "lstm_univariate_price_level_h21.pt",
+      "lstm_univariate_price_level_h5.pt",
+      "lstm_univariate_relative_change_h1.pt",
+      "lstm_univariate_relative_change_h21.pt",
+      "lstm_univariate_relative_change_h5.pt"
+    ],
+    "feature_importance": "feature_importance.csv",
+    "loss_history": "loss_history.json"
+  },
+  "splits_integrity": {
+    "all_valid": true,
+    "source_result": {
+      "path": "data/interim/canonical_market_panel.parquet",
+      "valid": true
+    },
+    "partition_results": {
+      "train_2008_2020": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "val_2021_2023": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "test_2024_2025": {
+        "parquet_valid": true,
+        "csv_valid": true
+      }
     }
   }
 }

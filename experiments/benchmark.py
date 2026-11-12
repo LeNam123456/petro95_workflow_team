@@ -6,22 +6,28 @@ Executes:
 3. Direct multi-horizon XGBoost regressions (Univariate & Multivariate).
 4. Direct multi-horizon sequence Deep Learning (LSTM & GRU, Univariate & Multivariate).
 5. Price reconstruction to USD/barrel and evaluation across 6 standard metrics + 3-state DA.
-6. Export of per-horizon predictions, feature importance rankings, neural checkpoints, loss curves, and audit manifest.
+6. Export of per-horizon predictions, feature importance rankings, neural checkpoints, publication figures, and full reproducible experiment manifest.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
 from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
 
 from src.data.dataset import SupervisedBatch, build_supervised_samples
+from src.data.manifest import build_experiment_manifest, save_experiment_manifest
 from src.data.validation import audit_point_in_time, verify_splits_integrity
 from src.evaluation.metrics import compute_metrics
-from src.evaluation.visualization import plot_loss_curves
+from src.evaluation.visualization import (
+    plot_actual_vs_predicted,
+    plot_directional_confusion_matrices,
+    plot_loss_curves,
+)
 from src.models.base import Forecaster
 from src.models.baseline import NaivePersistenceModel
 from src.models.gru import GRUForecaster
@@ -72,6 +78,7 @@ def _evaluate_and_record(
     batch: SupervisedBatch,
     scenario: str,
     horizon: int,
+    runtime_seconds: float | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Evaluate model on batch, calculate standard metrics, and assemble outputs."""
     pred_prices = model.predict_prices(batch)
@@ -86,13 +93,16 @@ def _evaluate_and_record(
         scenario=scenario,
         pred_prices=pred_prices,
     )
-    leaderboard_entry = {
+    leaderboard_entry: dict[str, Any] = {
         "model": model.name,
         "scenario": scenario,
         "target_representation": batch.target_representation,
         "horizon": horizon,
         **metrics,
     }
+    if runtime_seconds is not None:
+        leaderboard_entry["runtime_seconds"] = round(runtime_seconds, 4)
+
     return pred_df, leaderboard_entry
 
 
@@ -116,9 +126,12 @@ def run_benchmark(
     nn_num_layers: int | None = None,
     nn_patience: int | None = None,
     nn_learning_rate: float | None = None,
+    generate_plots: bool = True,
     verbose: bool = False,
 ) -> pd.DataFrame:
     """Execute multi-model forecasting benchmark pipeline."""
+    total_start_time = time.perf_counter()
+
     # Ensure canonical determinism
     set_seed(seed)
 
@@ -251,13 +264,17 @@ def run_benchmark(
         # 5.1 Naive Baseline (3 horizons)
         if "naive" in normalized_models:
             for h in horizons:
+                t0 = time.perf_counter()
                 batch = batches[("relative_change", "univariate", h)]["test"]
                 model = NaivePersistenceModel()
+                duration = time.perf_counter() - t0
+
                 pred_df, entry = _evaluate_and_record(
                     model=model,
                     batch=batch,
                     scenario="univariate",
                     horizon=h,
+                    runtime_seconds=duration,
                 )
                 horizon_predictions[h].append(pred_df)
                 leaderboard_rows.append(entry)
@@ -270,6 +287,7 @@ def run_benchmark(
                     val_batch = batches[("relative_change", scenario, h)]["val"]
                     test_batch = batches[("relative_change", scenario, h)]["test"]
 
+                    t0 = time.perf_counter()
                     xgb_config = XGBoostConfig(
                         n_estimators=n_estimators,
                         max_depth=max_depth,
@@ -282,12 +300,14 @@ def run_benchmark(
                     )
                     xgb_forecaster = XGBoostForecaster(config=xgb_config)
                     xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
+                    duration = time.perf_counter() - t0
 
                     pred_df, entry = _evaluate_and_record(
                         model=xgb_forecaster,
                         batch=test_batch,
                         scenario=scenario,
                         horizon=h,
+                        runtime_seconds=duration,
                     )
                     horizon_predictions[h].append(pred_df)
                     leaderboard_rows.append(entry)
@@ -303,17 +323,20 @@ def run_benchmark(
                     val_batch = batches[("relative_change", scenario, h)]["val"]
                     test_batch = batches[("relative_change", scenario, h)]["test"]
 
+                    t0 = time.perf_counter()
                     lstm_model = LSTMForecaster(
                         config=lstm_cfg,
                         checkpoint_dir=checkpoints_dir,
                     )
                     lstm_model.fit(train_batch, val_batch=val_batch)
+                    duration = time.perf_counter() - t0
 
                     pred_df, entry = _evaluate_and_record(
                         model=lstm_model,
                         batch=test_batch,
                         scenario=scenario,
                         horizon=h,
+                        runtime_seconds=duration,
                     )
                     horizon_predictions[h].append(pred_df)
                     leaderboard_rows.append(entry)
@@ -337,17 +360,20 @@ def run_benchmark(
                     val_batch = batches[("relative_change", scenario, h)]["val"]
                     test_batch = batches[("relative_change", scenario, h)]["test"]
 
+                    t0 = time.perf_counter()
                     gru_model = GRUForecaster(
                         config=gru_cfg,
                         checkpoint_dir=checkpoints_dir,
                     )
                     gru_model.fit(train_batch, val_batch=val_batch)
+                    duration = time.perf_counter() - t0
 
                     pred_df, entry = _evaluate_and_record(
                         model=gru_model,
                         batch=test_batch,
                         scenario=scenario,
                         horizon=h,
+                        runtime_seconds=duration,
                     )
                     horizon_predictions[h].append(pred_df)
                     leaderboard_rows.append(entry)
@@ -373,6 +399,7 @@ def run_benchmark(
                     val_batch = batches[("price_level", scenario, h)]["val"]
                     test_batch = batches[("price_level", scenario, h)]["test"]
 
+                    t0 = time.perf_counter()
                     xgb_config = XGBoostConfig(
                         n_estimators=n_estimators,
                         max_depth=max_depth,
@@ -385,12 +412,14 @@ def run_benchmark(
                     )
                     xgb_forecaster = XGBoostForecaster(config=xgb_config)
                     xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
+                    duration = time.perf_counter() - t0
 
                     pred_df, entry = _evaluate_and_record(
                         model=xgb_forecaster,
                         batch=test_batch,
                         scenario=scenario,
                         horizon=h,
+                        runtime_seconds=duration,
                     )
                     horizon_predictions[h].append(pred_df)
                     leaderboard_rows.append(entry)
@@ -406,17 +435,20 @@ def run_benchmark(
                     val_batch = batches[("price_level", scenario, h)]["val"]
                     test_batch = batches[("price_level", scenario, h)]["test"]
 
+                    t0 = time.perf_counter()
                     lstm_model = LSTMForecaster(
                         config=lstm_cfg,
                         checkpoint_dir=checkpoints_dir,
                     )
                     lstm_model.fit(train_batch, val_batch=val_batch)
+                    duration = time.perf_counter() - t0
 
                     pred_df, entry = _evaluate_and_record(
                         model=lstm_model,
                         batch=test_batch,
                         scenario=scenario,
                         horizon=h,
+                        runtime_seconds=duration,
                     )
                     horizon_predictions[h].append(pred_df)
                     leaderboard_rows.append(entry)
@@ -446,18 +478,41 @@ def run_benchmark(
         all_fi_df.to_csv(fi_csv_path, index=False)
 
     # 11. Plot and save loss curves (if recurrent models were executed)
-    if loss_histories:
+    if loss_histories and generate_plots:
         plot_loss_curves(loss_histories, figures_dir / "loss_curves.png")
-        # Save loss history json
         loss_hist_file = out_dir / "loss_history.json"
         loss_hist_file.write_text(json.dumps(loss_histories, indent=2), encoding="utf-8")
 
-    # 12. Write benchmark leaderboard
+    # 12. Plot actual vs predicted & directional confusion matrices
+    if generate_plots:
+        for h, df_list in horizon_predictions.items():
+            if df_list:
+                combined_h_df = pd.concat(df_list, ignore_index=True)
+                plot_actual_vs_predicted(
+                    predictions_df=combined_h_df,
+                    horizon=h,
+                    output_path=figures_dir / f"actual_vs_predicted_h{h}.png",
+                )
+
+        if any(horizon_predictions.values()):
+            preds_by_h_dict = {
+                h: pd.concat(df_list, ignore_index=True)
+                for h, df_list in horizon_predictions.items()
+                if df_list
+            }
+            plot_directional_confusion_matrices(
+                predictions_by_horizon=preds_by_h_dict,
+                output_path=figures_dir / "directional_confusion_matrix.png",
+            )
+
+    # 13. Write benchmark leaderboard
     leaderboard_df = pd.DataFrame(leaderboard_rows)
     leaderboard_path = out_dir / "benchmark_leaderboard.csv"
     leaderboard_df.to_csv(leaderboard_path, index=False)
 
-    # 13. Save audit manifest
+    total_duration = time.perf_counter() - total_start_time
+
+    # 14. Save full experiment manifest & audit manifest
     if run_price_level and run_relative:
         stage_str = "Stage 6 - Price Level Ablation Benchmark & Full 33-Configuration Evaluation"
     elif run_price_level:
@@ -467,58 +522,69 @@ def run_benchmark(
     else:
         stage_str = "Stage 4 - XGBoost Relative Change Benchmark"
 
-    audit_manifest = {
-        "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
-        "benchmark_stage": stage_str,
-        "seed": seed,
-        "models_evaluated": list(models),
-        "target_representations_evaluated": target_reps,
-        "total_configurations": len(leaderboard_df),
-        "splits_integrity": integrity_report,
-        "pit_audit": pit_report.to_dict(),
-        "horizons_evaluated": list(horizons),
-        "test_sample_counts": {
-            f"h{h}": int(leaderboard_df.loc[leaderboard_df["horizon"] == h, "n_samples"].iloc[0])
-            for h in horizons
-            if len(leaderboard_df.loc[leaderboard_df["horizon"] == h]) > 0
+    hyperparams = {
+        "xgboost": {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "learning_rate": learning_rate,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "early_stopping_rounds": xgb_early_stopping,
+            "random_state": xgb_seed,
         },
-        "saved_checkpoints": sorted(list(set(saved_checkpoints))),
-        "hyperparameters": {
-            "xgboost": {
-                "n_estimators": n_estimators,
-                "max_depth": max_depth,
-                "learning_rate": learning_rate,
-                "subsample": subsample,
-                "colsample_bytree": colsample_bytree,
-                "early_stopping_rounds": xgb_early_stopping,
-                "random_state": xgb_seed,
-            },
-            "lstm": {
-                "hidden_dim": lstm_cfg.hidden_dim,
-                "num_layers": lstm_cfg.num_layers,
-                "dropout": lstm_cfg.dropout,
-                "learning_rate": lstm_cfg.learning_rate,
-                "batch_size": lstm_cfg.batch_size,
-                "epochs": lstm_cfg.epochs,
-                "early_stopping_patience": lstm_cfg.early_stopping_patience,
-                "random_state": lstm_cfg.random_state,
-            },
-            "gru": {
-                "hidden_dim": gru_cfg.hidden_dim,
-                "num_layers": gru_cfg.num_layers,
-                "dropout": gru_cfg.dropout,
-                "learning_rate": gru_cfg.learning_rate,
-                "batch_size": gru_cfg.batch_size,
-                "epochs": gru_cfg.epochs,
-                "early_stopping_patience": gru_cfg.early_stopping_patience,
-                "random_state": gru_cfg.random_state,
-            },
+        "lstm": {
+            "hidden_dim": lstm_cfg.hidden_dim,
+            "num_layers": lstm_cfg.num_layers,
+            "dropout": lstm_cfg.dropout,
+            "learning_rate": lstm_cfg.learning_rate,
+            "batch_size": lstm_cfg.batch_size,
+            "epochs": lstm_cfg.epochs,
+            "early_stopping_patience": lstm_cfg.early_stopping_patience,
+            "random_state": lstm_cfg.random_state,
+        },
+        "gru": {
+            "hidden_dim": gru_cfg.hidden_dim,
+            "num_layers": gru_cfg.num_layers,
+            "dropout": gru_cfg.dropout,
+            "learning_rate": gru_cfg.learning_rate,
+            "batch_size": gru_cfg.batch_size,
+            "epochs": gru_cfg.epochs,
+            "early_stopping_patience": gru_cfg.early_stopping_patience,
+            "random_state": gru_cfg.random_state,
         },
     }
+
+    generated_artifacts = {
+        "leaderboard": str(leaderboard_path.relative_to(out_dir)),
+        "predictions": [f"predictions/predictions_h{h}.csv" for h in horizons if horizon_predictions[h]],
+        "figures": [
+            f"figures/actual_vs_predicted_h{h}.png" for h in horizons if horizon_predictions[h]
+        ] + (["figures/directional_confusion_matrix.png"] if any(horizon_predictions.values()) else []) + (["figures/loss_curves.png"] if loss_histories else []),
+        "checkpoints": sorted(list(set(saved_checkpoints))),
+    }
+
+    full_manifest = build_experiment_manifest(
+        benchmark_stage=stage_str,
+        seed=seed,
+        models_evaluated=list(models),
+        target_representations_evaluated=target_reps,
+        horizons_evaluated=list(horizons),
+        splits_manifest_path=m_path,
+        canonical_df=canonical_df,
+        pit_audit_report=pit_report,
+        splits_integrity=integrity_report,
+        hyperparameters=hyperparams,
+        leaderboard_df=leaderboard_df,
+        saved_checkpoints=saved_checkpoints,
+        partitions={"train": train_df, "val": val_df, "test": test_df},
+        total_runtime_seconds=round(total_duration, 3),
+        artifacts=generated_artifacts,
+    )
+
     manifest_out_path = out_dir / "audit_manifest.json"
-    manifest_out_path.write_text(json.dumps(audit_manifest, indent=2, default=str), encoding="utf-8")
+    save_experiment_manifest(full_manifest, manifest_out_path)
     experiment_manifest_path = out_dir / "experiment_manifest.json"
-    experiment_manifest_path.write_text(json.dumps(audit_manifest, indent=2, default=str), encoding="utf-8")
+    save_experiment_manifest(full_manifest, experiment_manifest_path)
 
     return leaderboard_df
 
