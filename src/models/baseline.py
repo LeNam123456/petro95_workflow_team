@@ -19,7 +19,11 @@ class NaivePersistenceModel:
     def __init__(self) -> None:
         self.name = "Naive"
 
-    def fit(self, batch: SupervisedBatch) -> NaivePersistenceModel:
+    def fit(
+        self,
+        train_batch: SupervisedBatch,
+        val_batch: SupervisedBatch | None = None,
+    ) -> NaivePersistenceModel:
         """No parameters to train for Naive Persistence."""
         return self
 

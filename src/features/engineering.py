@@ -12,12 +12,15 @@ Conforms to ADR-0007:
 
 from __future__ import annotations
 
+from typing import Literal
 import numpy as np
 
 from src.data.dataset import SupervisedBatch
 
+ScenarioType = Literal["univariate", "multivariate"]
 
-def get_feature_names(scenario: str = "univariate") -> list[str]:
+
+def get_feature_names(scenario: ScenarioType | str = "univariate") -> list[str]:
     """Return canonical feature names for XGBoost tabular features.
 
     Parameters:

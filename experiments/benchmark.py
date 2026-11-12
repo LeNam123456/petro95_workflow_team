@@ -13,12 +13,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+import numpy as np
 import pandas as pd
 import yaml
 
 from src.data.dataset import SupervisedBatch, build_supervised_samples
 from src.data.validation import audit_point_in_time, verify_splits_integrity
 from src.evaluation.metrics import compute_metrics
+from src.models.base import Forecaster
 from src.models.baseline import NaivePersistenceModel
 from src.models.xgboost_model import XGBoostConfig, XGBoostForecaster
 
@@ -42,7 +44,7 @@ def _build_predictions_df(
     batch: SupervisedBatch,
     model_name: str,
     scenario: str,
-    pred_prices: Any,
+    pred_prices: np.ndarray,
 ) -> pd.DataFrame:
     """Construct standardized per-sample prediction records DataFrame."""
     return pd.DataFrame({
@@ -58,6 +60,35 @@ def _build_predictions_df(
         "predicted_price": pred_prices,
         "error": pred_prices - batch.actual_prices,
     })
+
+
+def _evaluate_and_record(
+    model: Forecaster,
+    batch: SupervisedBatch,
+    scenario: str,
+    horizon: int,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Evaluate model on batch, calculate standard metrics, and assemble outputs."""
+    pred_prices = model.predict_prices(batch)
+    metrics = compute_metrics(
+        actual_prices=batch.actual_prices,
+        predicted_prices=pred_prices,
+        origin_prices=batch.origin_prices,
+    )
+    pred_df = _build_predictions_df(
+        batch=batch,
+        model_name=model.name,
+        scenario=scenario,
+        pred_prices=pred_prices,
+    )
+    leaderboard_entry = {
+        "model": model.name,
+        "scenario": scenario,
+        "target_representation": batch.target_representation,
+        "horizon": horizon,
+        **metrics,
+    }
+    return pred_df, leaderboard_entry
 
 
 def run_benchmark(
@@ -85,13 +116,20 @@ def run_benchmark(
     # 1. Verify split integrity
     integrity_report = verify_splits_integrity(m_path, raise_on_error=True)
 
-    # 2. Load splits in strictly read-only mode
-    train_df = pd.read_parquet(s_dir / "train_2008_2020.parquet")
-    val_df = pd.read_parquet(s_dir / "val_2021_2023.parquet")
-    test_df = pd.read_parquet(s_dir / "test_2024_2025.parquet")
+    # 2. Read manifest to resolve partition files
+    manifest_data = json.loads(m_path.read_text(encoding="utf-8"))
+    partition_keys = list(manifest_data.get("partitions", {}).keys())
+
+    train_file = f"{partition_keys[0]}.parquet" if len(partition_keys) > 0 else "train_2008_2020.parquet"
+    val_file = f"{partition_keys[1]}.parquet" if len(partition_keys) > 1 else "val_2021_2023.parquet"
+    test_file = f"{partition_keys[2]}.parquet" if len(partition_keys) > 2 else "test_2024_2025.parquet"
+
+    # Load splits in strictly read-only mode
+    train_df = pd.read_parquet(s_dir / train_file)
+    val_df = pd.read_parquet(s_dir / val_file)
+    test_df = pd.read_parquet(s_dir / test_file)
 
     # 3. Audit PIT governance
-    manifest_data = json.loads(m_path.read_text(encoding="utf-8"))
     canonical_source = manifest_data.get("dataset_source", "data/interim/canonical_market_panel.parquet")
     canonical_path = Path(canonical_source)
     if not canonical_path.is_absolute():
@@ -134,29 +172,14 @@ def run_benchmark(
             )
 
             model = NaivePersistenceModel()
-            pred_prices = model.predict_prices(batch)
-
-            metrics = compute_metrics(
-                actual_prices=batch.actual_prices,
-                predicted_prices=pred_prices,
-                origin_prices=batch.origin_prices,
-            )
-
-            pred_df = _build_predictions_df(
+            pred_df, entry = _evaluate_and_record(
+                model=model,
                 batch=batch,
-                model_name="Naive",
                 scenario="univariate",
-                pred_prices=pred_prices,
+                horizon=h,
             )
             horizon_predictions[h].append(pred_df)
-
-            leaderboard_rows.append({
-                "model": "Naive",
-                "scenario": "univariate",
-                "target_representation": target_representation,
-                "horizon": h,
-                **metrics,
-            })
+            leaderboard_rows.append(entry)
 
     # 6. Run XGBoost Models
     if "xgboost" in normalized_models:
@@ -201,32 +224,17 @@ def run_benchmark(
                 xgb_forecaster = XGBoostForecaster(config=xgb_config)
                 xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
 
-                pred_prices = xgb_forecaster.predict_prices(test_batch)
-
-                metrics = compute_metrics(
-                    actual_prices=test_batch.actual_prices,
-                    predicted_prices=pred_prices,
-                    origin_prices=test_batch.origin_prices,
-                )
-
-                pred_df = _build_predictions_df(
+                pred_df, entry = _evaluate_and_record(
+                    model=xgb_forecaster,
                     batch=test_batch,
-                    model_name="XGBoost",
                     scenario=scenario,
-                    pred_prices=pred_prices,
+                    horizon=h,
                 )
                 horizon_predictions[h].append(pred_df)
+                leaderboard_rows.append(entry)
 
                 fi_df = xgb_forecaster.get_feature_importance_df(horizon=h, scenario=scenario)
                 feature_importance_dfs.append(fi_df)
-
-                leaderboard_rows.append({
-                    "model": "XGBoost",
-                    "scenario": scenario,
-                    "target_representation": target_representation,
-                    "horizon": h,
-                    **metrics,
-                })
 
     # 7. Write predictions per horizon
     for h, df_list in horizon_predictions.items():

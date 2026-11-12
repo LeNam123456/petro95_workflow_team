@@ -42,29 +42,17 @@ class XGBoostForecaster:
     def __init__(
         self,
         config: XGBoostConfig | None = None,
-        n_estimators: int = 500,
-        max_depth: int = 4,
-        learning_rate: float = 0.05,
-        subsample: float = 0.8,
-        colsample_bytree: float = 0.8,
-        early_stopping_rounds: int = 15,
-        random_state: int = 42,
-        eval_metric: str = "rmse",
+        **kwargs: Any,
     ) -> None:
         self.name = "XGBoost"
-        if config is not None:
-            self.config = config
+        base_config = config or XGBoostConfig()
+        if kwargs:
+            # Override any explicitly supplied config parameters
+            valid_fields = set(base_config.__dataclass_fields__.keys())  # type: ignore[attr-defined]
+            override_dict = {k: v for k, v in kwargs.items() if k in valid_fields}
+            self.config = XGBoostConfig(**{**base_config.__dict__, **override_dict})
         else:
-            self.config = XGBoostConfig(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                learning_rate=learning_rate,
-                subsample=subsample,
-                colsample_bytree=colsample_bytree,
-                early_stopping_rounds=early_stopping_rounds,
-                random_state=random_state,
-                eval_metric=eval_metric,
-            )
+            self.config = base_config
 
         self.estimator: xgb.XGBRegressor | None = None
         self.feature_names_: list[str] = []
