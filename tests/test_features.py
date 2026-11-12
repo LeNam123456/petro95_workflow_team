@@ -121,3 +121,31 @@ def test_raw_price_spread_completely_excluded(sample_market_df: pd.DataFrame) ->
     for name in names:
         assert "spread" not in name.lower()
         assert "crack" not in name.lower()
+
+
+def test_price_level_tabular_features(sample_market_df: pd.DataFrame) -> None:
+    """Verify Price Level tabular features contain physical price levels and returns."""
+    batch = build_supervised_samples(
+        partition_df=sample_market_df,
+        lookback=30,
+        horizon=1,
+        scenario="univariate",
+        target_representation="price_level",
+    )
+    features, names = extract_xgboost_features(batch)
+
+    # 1. Exact 32 features
+    assert features.shape == (len(batch), 32)
+
+    # 2. For sample 0: origin is index 29 (price 129.0)
+    # Lag 0 is physical price at origin P_o = 129.0
+    assert features[0, names.index("mg95_lag_0")] == pytest.approx(129.0)
+    # Lag 1 is physical price at origin-1 P_{o-1} = 128.0
+    assert features[0, names.index("mg95_lag_1")] == pytest.approx(128.0)
+    # Lag 29 is physical price at origin-29 P_{o-29} = 100.0
+    assert features[0, names.index("mg95_lag_29")] == pytest.approx(100.0)
+
+    # Returns
+    assert features[0, names.index("mg95_r1")] == pytest.approx(1.0 / 128.0)
+    assert features[0, names.index("mg95_r5")] == pytest.approx(5.0 / 124.0)
+

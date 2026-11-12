@@ -1,0 +1,105 @@
+{
+  "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
+  "benchmark_stage": "Stage 6 - Price Level Ablation Benchmark & Full 33-Configuration Evaluation",
+  "seed": 42,
+  "models_evaluated": [
+    "naive",
+    "xgboost",
+    "lstm",
+    "gru"
+  ],
+  "target_representations_evaluated": [
+    "relative_change",
+    "price_level"
+  ],
+  "total_configurations": 33,
+  "splits_integrity": {
+    "all_valid": true,
+    "source_result": {
+      "path": "data/interim/canonical_market_panel.parquet",
+      "valid": true
+    },
+    "partition_results": {
+      "train_2008_2020": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "val_2021_2023": {
+        "parquet_valid": true,
+        "csv_valid": true
+      },
+      "test_2024_2025": {
+        "parquet_valid": true,
+        "csv_valid": true
+      }
+    }
+  },
+  "pit_audit": {
+    "passed": true,
+    "total_rows": 4428,
+    "feature_violations": 0,
+    "target_violations": 0,
+    "details": {}
+  },
+  "horizons_evaluated": [
+    1,
+    5,
+    21
+  ],
+  "test_sample_counts": {
+    "h1": 664,
+    "h5": 660,
+    "h21": 644
+  },
+  "saved_checkpoints": [
+    "gru_multivariate_relative_change_h1.pt",
+    "gru_multivariate_relative_change_h21.pt",
+    "gru_multivariate_relative_change_h5.pt",
+    "gru_univariate_relative_change_h1.pt",
+    "gru_univariate_relative_change_h21.pt",
+    "gru_univariate_relative_change_h5.pt",
+    "lstm_multivariate_price_level_h1.pt",
+    "lstm_multivariate_price_level_h21.pt",
+    "lstm_multivariate_price_level_h5.pt",
+    "lstm_multivariate_relative_change_h1.pt",
+    "lstm_multivariate_relative_change_h21.pt",
+    "lstm_multivariate_relative_change_h5.pt",
+    "lstm_univariate_price_level_h1.pt",
+    "lstm_univariate_price_level_h21.pt",
+    "lstm_univariate_price_level_h5.pt",
+    "lstm_univariate_relative_change_h1.pt",
+    "lstm_univariate_relative_change_h21.pt",
+    "lstm_univariate_relative_change_h5.pt"
+  ],
+  "hyperparameters": {
+    "xgboost": {
+      "n_estimators": 500,
+      "max_depth": 4,
+      "learning_rate": 0.05,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "early_stopping_rounds": 15,
+      "random_state": 42
+    },
+    "lstm": {
+      "hidden_dim": 64,
+      "num_layers": 2,
+      "dropout": 0.2,
+      "learning_rate": 0.001,
+      "batch_size": 32,
+      "epochs": 100,
+      "early_stopping_patience": 15,
+      "random_state": 42
+    },
+    "gru": {
+      "hidden_dim": 64,
+      "num_layers": 2,
+      "dropout": 0.2,
+      "learning_rate": 0.001,
+      "batch_size": 32,
+      "epochs": 100,
+      "early_stopping_patience": 15,
+      "random_state": 42
+    }
+  }
+}

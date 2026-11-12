@@ -59,6 +59,19 @@ def main() -> None:
         default=None,
         help="Optional override for neural network training epochs",
     )
+    parser.add_argument(
+        "--include-ablation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include 12 Price Level ablation models ({XGBoost, LSTM} x {uni, multi} x {1, 5, 21}) to complete all 33 MVP configurations (default: True)",
+    )
+    parser.add_argument(
+        "--target-representation",
+        type=str,
+        default="relative_change",
+        choices=["relative_change", "price_level", "all"],
+        help="Target representation to evaluate: 'relative_change', 'price_level', or 'all' (default: relative_change)",
+    )
     args = parser.parse_args()
 
     output_path = Path(args.output_dir)
@@ -77,9 +90,11 @@ def main() -> None:
     else:
         seed_list = [args.seed]
 
+    include_ablation = args.include_ablation or (args.target_representation == "all")
+
     print("=" * 80)
     print("MOGAS 95 FORECASTING BENCHMARK — EXECUTION")
-    print(f"Models: {[m.upper() for m in selected_models]} | Horizons: {horizons} | Seeds: {seed_list} | Output: {output_path}")
+    print(f"Models: {[m.upper() for m in selected_models]} | Horizons: {horizons} | Target Rep: {args.target_representation} | Ablation: {include_ablation} | Seeds: {seed_list} | Output: {output_path}")
     print("=" * 80)
 
     all_leaderboards: list[pd.DataFrame] = []
@@ -98,6 +113,8 @@ def main() -> None:
             output_dir=current_out_dir,
             config_path="configs/models.yaml",
             horizons=horizons,
+            target_representation=args.target_representation,
+            include_price_level_ablation=include_ablation,
             seed=current_seed,
             nn_epochs=args.epochs,
         )
@@ -108,7 +125,7 @@ def main() -> None:
 
     print("\n>>> BENCHMARK LEADERBOARD RESULTS (USD/bbl & Directional %):")
     cols_to_print = [
-        "model", "scenario", "horizon", "n_samples", "mae", "rmse", "mape", "r2",
+        "model", "scenario", "target_representation", "horizon", "n_samples", "mae", "rmse", "mape", "r2",
         "directional_accuracy", "majority_class_baseline", "up_pct", "down_pct", "flat_pct",
     ]
     available_cols = [c for c in cols_to_print if c in combined_leaderboard.columns]

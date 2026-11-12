@@ -18,6 +18,7 @@ import pandas as pd
 import xgboost as xgb
 
 from src.data.dataset import SupervisedBatch
+from src.data.scaling import TabularPriceLevelScaler
 from src.evaluation.reconstruction import reconstruct_from_price_level, reconstruct_price
 from src.features.engineering import extract_xgboost_features
 
@@ -58,6 +59,8 @@ class XGBoostForecaster:
         self.feature_names_: list[str] = []
         self.best_iteration_: int | None = None
         self.best_score_: float | None = None
+        self.scaler: TabularPriceLevelScaler | None = None
+        self.target_representation: str | None = None
 
     def fit(
         self,
@@ -66,9 +69,15 @@ class XGBoostForecaster:
         verbose: bool = False,
     ) -> XGBoostForecaster:
         """Fit XGBoost model on train_batch with early stopping on val_batch."""
+        self.target_representation = train_batch.target_representation
         X_train, feature_names = extract_xgboost_features(train_batch)
         y_train = train_batch.targets
         self.feature_names_ = feature_names
+
+        if self.target_representation == "price_level":
+            self.scaler = TabularPriceLevelScaler().fit(X_train, y_train)
+            X_train = self.scaler.transform_features(X_train)
+            y_train = self.scaler.transform_targets(y_train)
 
         df_train = pd.DataFrame(X_train, columns=feature_names)
 
@@ -76,6 +85,9 @@ class XGBoostForecaster:
         if val_batch is not None and len(val_batch) > 0:
             X_val, _ = extract_xgboost_features(val_batch)
             y_val = val_batch.targets
+            if self.target_representation == "price_level" and self.scaler is not None:
+                X_val = self.scaler.transform_features(X_val)
+                y_val = self.scaler.transform_targets(y_val)
             df_val = pd.DataFrame(X_val, columns=feature_names)
             eval_set.append((df_val, y_val))
 
@@ -113,8 +125,15 @@ class XGBoostForecaster:
             raise RuntimeError("Model must be fitted before calling predict().")
 
         X, _ = extract_xgboost_features(batch)
+        if self.target_representation == "price_level" and self.scaler is not None:
+            X = self.scaler.transform_features(X)
+
         df_x = pd.DataFrame(X, columns=self.feature_names_)
         preds = self.estimator.predict(df_x)
+
+        if self.target_representation == "price_level" and self.scaler is not None:
+            preds = np.asarray(self.scaler.inverse_transform_targets(preds), dtype=np.float64)
+
         return np.asarray(preds, dtype=np.float64)
 
     def predict_prices(self, batch: SupervisedBatch) -> np.ndarray:
@@ -137,6 +156,7 @@ class XGBoostForecaster:
         weight_scores = booster.get_score(importance_type="weight")
 
         rows: list[dict[str, Any]] = []
+        target_rep = self.target_representation or "relative_change"
         for name in self.feature_names_:
             raw_gain = gain_scores.get(name, 0.0)
             raw_weight = weight_scores.get(name, 0.0)
@@ -148,6 +168,7 @@ class XGBoostForecaster:
                 "importance_weight": weight,
                 "horizon": horizon,
                 "scenario": scenario,
+                "target_representation": target_rep,
             })
 
         df = pd.DataFrame(rows)

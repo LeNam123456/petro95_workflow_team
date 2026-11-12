@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from src.data.dataset import SupervisedBatch
+from src.data.scaling import PriceLevelScaler
 from src.evaluation.reconstruction import reconstruct_from_price_level, reconstruct_price
 from src.training.trainer import RecurrentTrainingConfig, TrainingHistory, train_recurrent_model
 
@@ -39,6 +40,7 @@ class BaseRecurrentForecaster:
         self.horizon: int | None = None
         self.scenario: str | None = None
         self.target_representation: str | None = None
+        self.scaler: PriceLevelScaler | None = None
 
     def _build_network(self, input_dim: int) -> nn.Module:
         """Construct the specific neural architecture (implemented by subclasses)."""
@@ -61,11 +63,23 @@ class BaseRecurrentForecaster:
 
         self.network = self._build_network(self.input_dim)
 
-        X_train = train_batch.features
-        y_train = train_batch.targets
+        if self.target_representation == "price_level":
+            self.scaler = PriceLevelScaler().fit(train_batch)
+            train_batch_to_use = self.scaler.transform(train_batch)
+            val_batch_to_use = (
+                self.scaler.transform(val_batch)
+                if val_batch is not None and len(val_batch) > 0
+                else None
+            )
+        else:
+            train_batch_to_use = train_batch
+            val_batch_to_use = val_batch
 
-        X_val = val_batch.features if val_batch is not None and len(val_batch) > 0 else None
-        y_val = val_batch.targets if val_batch is not None and len(val_batch) > 0 else None
+        X_train = train_batch_to_use.features
+        y_train = train_batch_to_use.targets
+
+        X_val = val_batch_to_use.features if val_batch_to_use is not None and len(val_batch_to_use) > 0 else None
+        y_val = val_batch_to_use.targets if val_batch_to_use is not None and len(val_batch_to_use) > 0 else None
 
         # Resolve checkpoint destination
         cp_path = checkpoint_path
@@ -75,13 +89,15 @@ class BaseRecurrentForecaster:
             )
             cp_path = self.checkpoint_dir / filename
 
-        metadata = {
+        metadata: dict[str, Any] = {
             "model_name": self.name,
             "horizon": self.horizon,
             "scenario": self.scenario,
             "target_representation": self.target_representation,
             "input_dim": self.input_dim,
         }
+        if self.scaler is not None:
+            metadata["scaler"] = self.scaler.to_dict()
 
         self.history = train_recurrent_model(
             model=self.network,
@@ -104,13 +120,45 @@ class BaseRecurrentForecaster:
         if len(batch) == 0:
             return np.empty((0,), dtype=np.float64)
 
+        if self.target_representation == "price_level" and self.scaler is not None:
+            batch_to_use = self.scaler.transform(batch)
+        else:
+            batch_to_use = batch
+
         self.network.eval()
         with torch.no_grad():
-            tensor_x = torch.from_numpy(batch.features).float()
+            tensor_x = torch.from_numpy(batch_to_use.features).float()
             out = self.network(tensor_x)
             preds = out.cpu().numpy().astype(np.float64)
 
+        if self.target_representation == "price_level" and self.scaler is not None:
+            preds = np.asarray(self.scaler.inverse_transform_targets(preds), dtype=np.float64)
+
         return preds
+
+    def load_checkpoint(self, checkpoint_path: str | Path) -> BaseRecurrentForecaster:
+        """Restore model weights, network configuration, and coupled scaler from checkpoint."""
+        cp_path = Path(checkpoint_path)
+        if not cp_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found at: {cp_path}")
+
+        ckpt = torch.load(cp_path, map_location="cpu", weights_only=False)
+        metadata = ckpt.get("metadata", {})
+        self.input_dim = metadata.get("input_dim", self.input_dim)
+        self.horizon = metadata.get("horizon", self.horizon)
+        self.scenario = metadata.get("scenario", self.scenario)
+        self.target_representation = metadata.get("target_representation", self.target_representation)
+
+        if self.network is None and self.input_dim is not None:
+            self.network = self._build_network(self.input_dim)
+
+        if self.network is not None and "model_state_dict" in ckpt:
+            self.network.load_state_dict(ckpt["model_state_dict"])
+
+        if "scaler" in metadata and metadata["scaler"] is not None:
+            self.scaler = PriceLevelScaler.from_dict(metadata["scaler"])
+
+        return self
 
     def predict_prices(self, batch: SupervisedBatch) -> np.ndarray:
         """Generate reconstructed price level forecasts in USD/barrel."""

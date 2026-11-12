@@ -105,6 +105,7 @@ def run_benchmark(
     horizons: tuple[int, ...] = (1, 5, 21),
     scenarios: tuple[str, ...] = ("univariate", "multivariate"),
     target_representation: str = "relative_change",
+    include_price_level_ablation: bool = False,
     lookback: int = 30,
     seed: int = 42,
     xgb_n_estimators: int | None = None,
@@ -198,156 +199,238 @@ def run_benchmark(
     saved_checkpoints: list[str] = []
 
     normalized_models = [m.lower() for m in models]
+    run_relative = target_representation in ("relative_change", "all", "both")
+    run_price_level = (
+        include_price_level_ablation or target_representation in ("price_level", "all", "both")
+    )
 
-    # Pre-build SupervisedBatches for each (scenario, horizon)
+    target_reps: list[str] = []
+    if run_relative:
+        target_reps.append("relative_change")
+    if run_price_level:
+        target_reps.append("price_level")
+
+    # Pre-build SupervisedBatches for each (target_rep, scenario, horizon)
     # Cache batches to avoid redundant computation across models
-    batches: dict[tuple[str, int], dict[str, SupervisedBatch]] = {}
-    for scenario in scenarios:
-        for h in horizons:
-            t_batch = build_supervised_samples(
-                partition_df=train_df,
-                prior_df=None,
-                lookback=lookback,
-                horizon=h,
-                scenario=scenario,
-                target_representation=target_representation,
-            )
-            v_batch = build_supervised_samples(
-                partition_df=val_df,
-                prior_df=train_df,
-                lookback=lookback,
-                horizon=h,
-                scenario=scenario,
-                target_representation=target_representation,
-            )
-            te_batch = build_supervised_samples(
-                partition_df=test_df,
-                prior_df=val_df,
-                lookback=lookback,
-                horizon=h,
-                scenario=scenario,
-                target_representation=target_representation,
-            )
-            batches[(scenario, h)] = {
-                "train": t_batch,
-                "val": v_batch,
-                "test": te_batch,
-            }
-
-    # 5. Run Naive Baseline
-    if "naive" in normalized_models:
-        for h in horizons:
-            batch = batches[("univariate", h)]["test"]
-            model = NaivePersistenceModel()
-            pred_df, entry = _evaluate_and_record(
-                model=model,
-                batch=batch,
-                scenario="univariate",
-                horizon=h,
-            )
-            horizon_predictions[h].append(pred_df)
-            leaderboard_rows.append(entry)
-
-    # 6. Run XGBoost Models
-    if "xgboost" in normalized_models:
+    batches: dict[tuple[str, str, int], dict[str, SupervisedBatch]] = {}
+    for rep in target_reps:
         for scenario in scenarios:
             for h in horizons:
-                train_batch = batches[(scenario, h)]["train"]
-                val_batch = batches[(scenario, h)]["val"]
-                test_batch = batches[(scenario, h)]["test"]
-
-                xgb_config = XGBoostConfig(
-                    n_estimators=n_estimators,
-                    max_depth=max_depth,
-                    learning_rate=learning_rate,
-                    subsample=subsample,
-                    colsample_bytree=colsample_bytree,
-                    early_stopping_rounds=xgb_early_stopping,
-                    random_state=xgb_seed,
-                    eval_metric="rmse",
-                )
-                xgb_forecaster = XGBoostForecaster(config=xgb_config)
-                xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
-
-                pred_df, entry = _evaluate_and_record(
-                    model=xgb_forecaster,
-                    batch=test_batch,
+                t_batch = build_supervised_samples(
+                    partition_df=train_df,
+                    prior_df=None,
+                    lookback=lookback,
+                    horizon=h,
                     scenario=scenario,
+                    target_representation=rep,
+                )
+                v_batch = build_supervised_samples(
+                    partition_df=val_df,
+                    prior_df=train_df,
+                    lookback=lookback,
+                    horizon=h,
+                    scenario=scenario,
+                    target_representation=rep,
+                )
+                te_batch = build_supervised_samples(
+                    partition_df=test_df,
+                    prior_df=val_df,
+                    lookback=lookback,
+                    horizon=h,
+                    scenario=scenario,
+                    target_representation=rep,
+                )
+                batches[(rep, scenario, h)] = {
+                    "train": t_batch,
+                    "val": v_batch,
+                    "test": te_batch,
+                }
+
+    # 5. Run Relative Change Models
+    if run_relative:
+        # 5.1 Naive Baseline (3 horizons)
+        if "naive" in normalized_models:
+            for h in horizons:
+                batch = batches[("relative_change", "univariate", h)]["test"]
+                model = NaivePersistenceModel()
+                pred_df, entry = _evaluate_and_record(
+                    model=model,
+                    batch=batch,
+                    scenario="univariate",
                     horizon=h,
                 )
                 horizon_predictions[h].append(pred_df)
                 leaderboard_rows.append(entry)
 
-                fi_df = xgb_forecaster.get_feature_importance_df(horizon=h, scenario=scenario)
-                feature_importance_dfs.append(fi_df)
+        # 5.2 XGBoost Models (2 scenarios x 3 horizons = 6 configurations)
+        if "xgboost" in normalized_models:
+            for scenario in scenarios:
+                for h in horizons:
+                    train_batch = batches[("relative_change", scenario, h)]["train"]
+                    val_batch = batches[("relative_change", scenario, h)]["val"]
+                    test_batch = batches[("relative_change", scenario, h)]["test"]
 
-    # 7. Run LSTM Models
-    if "lstm" in normalized_models:
-        for scenario in scenarios:
-            for h in horizons:
-                train_batch = batches[(scenario, h)]["train"]
-                val_batch = batches[(scenario, h)]["val"]
-                test_batch = batches[(scenario, h)]["test"]
+                    xgb_config = XGBoostConfig(
+                        n_estimators=n_estimators,
+                        max_depth=max_depth,
+                        learning_rate=learning_rate,
+                        subsample=subsample,
+                        colsample_bytree=colsample_bytree,
+                        early_stopping_rounds=xgb_early_stopping,
+                        random_state=xgb_seed,
+                        eval_metric="rmse",
+                    )
+                    xgb_forecaster = XGBoostForecaster(config=xgb_config)
+                    xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
 
-                lstm_model = LSTMForecaster(
-                    config=lstm_cfg,
-                    checkpoint_dir=checkpoints_dir,
-                )
-                lstm_model.fit(train_batch, val_batch=val_batch)
+                    pred_df, entry = _evaluate_and_record(
+                        model=xgb_forecaster,
+                        batch=test_batch,
+                        scenario=scenario,
+                        horizon=h,
+                    )
+                    horizon_predictions[h].append(pred_df)
+                    leaderboard_rows.append(entry)
 
-                pred_df, entry = _evaluate_and_record(
-                    model=lstm_model,
-                    batch=test_batch,
-                    scenario=scenario,
-                    horizon=h,
-                )
-                horizon_predictions[h].append(pred_df)
-                leaderboard_rows.append(entry)
+                    fi_df = xgb_forecaster.get_feature_importance_df(horizon=h, scenario=scenario)
+                    feature_importance_dfs.append(fi_df)
 
-                if lstm_model.history:
-                    label = f"LSTM_{scenario}_h{h}"
-                    loss_histories[label] = {
-                        "train": lstm_model.history.train_losses,
-                        "val": lstm_model.history.val_losses,
-                    }
+        # 5.3 LSTM Models (2 scenarios x 3 horizons = 6 configurations)
+        if "lstm" in normalized_models:
+            for scenario in scenarios:
+                for h in horizons:
+                    train_batch = batches[("relative_change", scenario, h)]["train"]
+                    val_batch = batches[("relative_change", scenario, h)]["val"]
+                    test_batch = batches[("relative_change", scenario, h)]["test"]
 
-                cp_file = checkpoints_dir / f"lstm_{scenario}_{target_representation}_h{h}.pt"
-                if cp_file.exists():
-                    saved_checkpoints.append(str(cp_file.name))
+                    lstm_model = LSTMForecaster(
+                        config=lstm_cfg,
+                        checkpoint_dir=checkpoints_dir,
+                    )
+                    lstm_model.fit(train_batch, val_batch=val_batch)
 
-    # 8. Run GRU Models
-    if "gru" in normalized_models:
-        for scenario in scenarios:
-            for h in horizons:
-                train_batch = batches[(scenario, h)]["train"]
-                val_batch = batches[(scenario, h)]["val"]
-                test_batch = batches[(scenario, h)]["test"]
+                    pred_df, entry = _evaluate_and_record(
+                        model=lstm_model,
+                        batch=test_batch,
+                        scenario=scenario,
+                        horizon=h,
+                    )
+                    horizon_predictions[h].append(pred_df)
+                    leaderboard_rows.append(entry)
 
-                gru_model = GRUForecaster(
-                    config=gru_cfg,
-                    checkpoint_dir=checkpoints_dir,
-                )
-                gru_model.fit(train_batch, val_batch=val_batch)
+                    if lstm_model.history:
+                        label = f"LSTM_{scenario}_h{h}"
+                        loss_histories[label] = {
+                            "train": lstm_model.history.train_losses,
+                            "val": lstm_model.history.val_losses,
+                        }
 
-                pred_df, entry = _evaluate_and_record(
-                    model=gru_model,
-                    batch=test_batch,
-                    scenario=scenario,
-                    horizon=h,
-                )
-                horizon_predictions[h].append(pred_df)
-                leaderboard_rows.append(entry)
+                    cp_file = checkpoints_dir / f"lstm_{scenario}_relative_change_h{h}.pt"
+                    if cp_file.exists():
+                        saved_checkpoints.append(str(cp_file.name))
 
-                if gru_model.history:
-                    label = f"GRU_{scenario}_h{h}"
-                    loss_histories[label] = {
-                        "train": gru_model.history.train_losses,
-                        "val": gru_model.history.val_losses,
-                    }
+        # 5.4 GRU Models (2 scenarios x 3 horizons = 6 configurations)
+        if "gru" in normalized_models:
+            for scenario in scenarios:
+                for h in horizons:
+                    train_batch = batches[("relative_change", scenario, h)]["train"]
+                    val_batch = batches[("relative_change", scenario, h)]["val"]
+                    test_batch = batches[("relative_change", scenario, h)]["test"]
 
-                cp_file = checkpoints_dir / f"gru_{scenario}_{target_representation}_h{h}.pt"
-                if cp_file.exists():
-                    saved_checkpoints.append(str(cp_file.name))
+                    gru_model = GRUForecaster(
+                        config=gru_cfg,
+                        checkpoint_dir=checkpoints_dir,
+                    )
+                    gru_model.fit(train_batch, val_batch=val_batch)
+
+                    pred_df, entry = _evaluate_and_record(
+                        model=gru_model,
+                        batch=test_batch,
+                        scenario=scenario,
+                        horizon=h,
+                    )
+                    horizon_predictions[h].append(pred_df)
+                    leaderboard_rows.append(entry)
+
+                    if gru_model.history:
+                        label = f"GRU_{scenario}_h{h}"
+                        loss_histories[label] = {
+                            "train": gru_model.history.train_losses,
+                            "val": gru_model.history.val_losses,
+                        }
+
+                    cp_file = checkpoints_dir / f"gru_{scenario}_relative_change_h{h}.pt"
+                    if cp_file.exists():
+                        saved_checkpoints.append(str(cp_file.name))
+
+    # 6. Run Price Level Ablation Models ({XGBoost, LSTM} x 2 scenarios x 3 horizons = 12 configurations)
+    if run_price_level:
+        # 6.1 XGBoost Price Level Ablation
+        if "xgboost" in normalized_models or include_price_level_ablation:
+            for scenario in scenarios:
+                for h in horizons:
+                    train_batch = batches[("price_level", scenario, h)]["train"]
+                    val_batch = batches[("price_level", scenario, h)]["val"]
+                    test_batch = batches[("price_level", scenario, h)]["test"]
+
+                    xgb_config = XGBoostConfig(
+                        n_estimators=n_estimators,
+                        max_depth=max_depth,
+                        learning_rate=learning_rate,
+                        subsample=subsample,
+                        colsample_bytree=colsample_bytree,
+                        early_stopping_rounds=xgb_early_stopping,
+                        random_state=xgb_seed,
+                        eval_metric="rmse",
+                    )
+                    xgb_forecaster = XGBoostForecaster(config=xgb_config)
+                    xgb_forecaster.fit(train_batch, val_batch=val_batch, verbose=verbose)
+
+                    pred_df, entry = _evaluate_and_record(
+                        model=xgb_forecaster,
+                        batch=test_batch,
+                        scenario=scenario,
+                        horizon=h,
+                    )
+                    horizon_predictions[h].append(pred_df)
+                    leaderboard_rows.append(entry)
+
+                    fi_df = xgb_forecaster.get_feature_importance_df(horizon=h, scenario=scenario)
+                    feature_importance_dfs.append(fi_df)
+
+        # 6.2 LSTM Price Level Ablation
+        if "lstm" in normalized_models or include_price_level_ablation:
+            for scenario in scenarios:
+                for h in horizons:
+                    train_batch = batches[("price_level", scenario, h)]["train"]
+                    val_batch = batches[("price_level", scenario, h)]["val"]
+                    test_batch = batches[("price_level", scenario, h)]["test"]
+
+                    lstm_model = LSTMForecaster(
+                        config=lstm_cfg,
+                        checkpoint_dir=checkpoints_dir,
+                    )
+                    lstm_model.fit(train_batch, val_batch=val_batch)
+
+                    pred_df, entry = _evaluate_and_record(
+                        model=lstm_model,
+                        batch=test_batch,
+                        scenario=scenario,
+                        horizon=h,
+                    )
+                    horizon_predictions[h].append(pred_df)
+                    leaderboard_rows.append(entry)
+
+                    if lstm_model.history:
+                        label = f"LSTM_price_level_{scenario}_h{h}"
+                        loss_histories[label] = {
+                            "train": lstm_model.history.train_losses,
+                            "val": lstm_model.history.val_losses,
+                        }
+
+                    cp_file = checkpoints_dir / f"lstm_{scenario}_price_level_h{h}.pt"
+                    if cp_file.exists():
+                        saved_checkpoints.append(str(cp_file.name))
 
     # 9. Write predictions per horizon
     for h, df_list in horizon_predictions.items():
@@ -375,12 +458,22 @@ def run_benchmark(
     leaderboard_df.to_csv(leaderboard_path, index=False)
 
     # 13. Save audit manifest
-    stage_str = "Stage 5 - Sequence Deep Learning Benchmark (LSTM & GRU)" if {"lstm", "gru"}.intersection(normalized_models) else "Stage 4 - XGBoost Relative Change Benchmark"
+    if run_price_level and run_relative:
+        stage_str = "Stage 6 - Price Level Ablation Benchmark & Full 33-Configuration Evaluation"
+    elif run_price_level:
+        stage_str = "Stage 6 - Price Level Ablation Benchmark (XGBoost & LSTM)"
+    elif {"lstm", "gru"}.intersection(normalized_models):
+        stage_str = "Stage 5 - Sequence Deep Learning Benchmark (LSTM & GRU)"
+    else:
+        stage_str = "Stage 4 - XGBoost Relative Change Benchmark"
+
     audit_manifest = {
         "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
         "benchmark_stage": stage_str,
         "seed": seed,
         "models_evaluated": list(models),
+        "target_representations_evaluated": target_reps,
+        "total_configurations": len(leaderboard_df),
         "splits_integrity": integrity_report,
         "pit_audit": pit_report.to_dict(),
         "horizons_evaluated": list(horizons),
@@ -424,6 +517,8 @@ def run_benchmark(
     }
     manifest_out_path = out_dir / "audit_manifest.json"
     manifest_out_path.write_text(json.dumps(audit_manifest, indent=2, default=str), encoding="utf-8")
+    experiment_manifest_path = out_dir / "experiment_manifest.json"
+    experiment_manifest_path.write_text(json.dumps(audit_manifest, indent=2, default=str), encoding="utf-8")
 
     return leaderboard_df
 

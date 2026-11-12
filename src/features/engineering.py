@@ -78,13 +78,13 @@ def extract_xgboost_features(batch: SupervisedBatch) -> tuple[np.ndarray, list[s
     for ch in range(n_channels):
         ch_window = feat_window[:, :, ch]  # shape: (N, lookback)
 
+        # Lags are extracted from window (k = 0..29 from origin backwards)
+        lags = [ch_window[:, -1 - k] for k in range(30)]
+
         if is_relative:
             # When target_representation is relative_change:
             # ch_window is already z^{(j)}_{o, k} where:
             # ch_window[:, -1 - k] is z_{o, k} = P_{o-k} / P_o - 1
-            # For k in 0..29:
-            lags = [ch_window[:, -1 - k] for k in range(30)]
-
             # Momentum returns:
             # z_{o,1} = P_{o-1}/P_o - 1  =>  P_o / P_{o-1} = 1 / (1 + z_{o,1})
             # R1 = (P_o - P_{o-1}) / P_{o-1} = 1 / (1 + z_{o,1}) - 1
@@ -100,12 +100,8 @@ def extract_xgboost_features(batch: SupervisedBatch) -> tuple[np.ndarray, list[s
         else:
             # When target_representation is price_level:
             # ch_window contains raw price levels P_{o-k}
+            # Lags are physical price levels at origin and past sessions: P_{o-k} for k=0..29
             p_origin = ch_window[:, -1]
-            safe_p_origin = np.where(p_origin != 0, p_origin, 1.0)
-
-            # z_{o,k} = P_{o-k} / P_o - 1
-            lags = [(ch_window[:, -1 - k] / safe_p_origin) - 1.0 for k in range(30)]
-
             p_lag1 = ch_window[:, -2]
             p_lag5 = ch_window[:, -6]
             safe_p_lag1 = np.where(p_lag1 != 0, p_lag1, 1.0)

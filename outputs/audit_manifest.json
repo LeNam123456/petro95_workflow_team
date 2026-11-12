@@ -1,6 +1,6 @@
 {
   "pipeline": "Pipeline Du bao Diem & Chieu huong Xang Platts Singapore Mogas 95",
-  "benchmark_stage": "Stage 5 - Sequence Deep Learning Benchmark (LSTM & GRU)",
+  "benchmark_stage": "Stage 6 - Price Level Ablation Benchmark & Full 33-Configuration Evaluation",
   "seed": 42,
   "models_evaluated": [
     "naive",
@@ -8,6 +8,11 @@
     "lstm",
     "gru"
   ],
+  "target_representations_evaluated": [
+    "relative_change",
+    "price_level"
+  ],
+  "total_configurations": 33,
   "splits_integrity": {
     "all_valid": true,
     "source_result": {
@@ -53,9 +58,15 @@
     "gru_univariate_relative_change_h1.pt",
     "gru_univariate_relative_change_h21.pt",
     "gru_univariate_relative_change_h5.pt",
+    "lstm_multivariate_price_level_h1.pt",
+    "lstm_multivariate_price_level_h21.pt",
+    "lstm_multivariate_price_level_h5.pt",
     "lstm_multivariate_relative_change_h1.pt",
     "lstm_multivariate_relative_change_h21.pt",
     "lstm_multivariate_relative_change_h5.pt",
+    "lstm_univariate_price_level_h1.pt",
+    "lstm_univariate_price_level_h21.pt",
+    "lstm_univariate_price_level_h5.pt",
     "lstm_univariate_relative_change_h1.pt",
     "lstm_univariate_relative_change_h21.pt",
     "lstm_univariate_relative_change_h5.pt"

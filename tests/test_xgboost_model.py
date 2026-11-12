@@ -99,3 +99,27 @@ def test_xgboost_determinism_seed_42(sample_partitions: tuple[pd.DataFrame, pd.D
     preds2 = model2.predict(test_batch)
 
     np.testing.assert_array_equal(preds1, preds2)
+
+
+def test_xgboost_fit_predict_price_level(sample_partitions: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]) -> None:
+    train_df, val_df, test_df = sample_partitions
+
+    train_batch = build_supervised_samples(train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    val_batch = build_supervised_samples(val_df, prior_df=train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    test_batch = build_supervised_samples(test_df, prior_df=val_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+
+    model = XGBoostForecaster(n_estimators=30, max_depth=3, random_state=42)
+    model.fit(train_batch, val_batch=val_batch)
+
+    # 1. Scaler exists and is fitted
+    assert model.scaler is not None
+    assert model.scaler.is_fitted_
+
+    # 2. Predict prices in USD/barrel
+    pred_prices = model.predict_prices(test_batch)
+    assert isinstance(pred_prices, np.ndarray)
+    assert pred_prices.shape == (len(test_batch),)
+    # Predicted price levels should be physical prices around 80-120
+    assert (pred_prices > 50.0).all()
+    assert (pred_prices < 150.0).all()
+

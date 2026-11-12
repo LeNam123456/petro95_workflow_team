@@ -11,6 +11,7 @@ Verifies:
 
 from __future__ import annotations
 
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
@@ -119,3 +120,56 @@ def test_recurrent_forecaster_determinism_seed_42(
     preds2 = model2.predict(test_batch)
 
     np.testing.assert_allclose(preds1, preds2, rtol=1e-5, atol=1e-6)
+
+
+def test_lstm_fit_predict_price_level(
+    sample_partitions: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+) -> None:
+    train_df, val_df, test_df = sample_partitions
+
+    train_batch = build_supervised_samples(train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    val_batch = build_supervised_samples(val_df, prior_df=train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    test_batch = build_supervised_samples(test_df, prior_df=val_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+
+    model = LSTMForecaster(hidden_dim=16, num_layers=1, epochs=3, batch_size=16, random_state=42)
+    model.fit(train_batch, val_batch=val_batch)
+
+    # 1. Scaler exists and is fitted
+    assert model.scaler is not None
+    assert model.scaler.is_fitted_
+
+    # 2. Predict prices in USD/barrel
+    pred_prices = model.predict_prices(test_batch)
+    assert isinstance(pred_prices, np.ndarray)
+    assert pred_prices.shape == (len(test_batch),)
+    assert (pred_prices > 50.0).all()
+    assert (pred_prices < 150.0).all()
+
+
+def test_lstm_checkpoint_restores_scaler(
+    sample_partitions: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+    tmp_path: Path,
+) -> None:
+    train_df, val_df, test_df = sample_partitions
+
+    train_batch = build_supervised_samples(train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    val_batch = build_supervised_samples(val_df, prior_df=train_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+    test_batch = build_supervised_samples(test_df, prior_df=val_df, lookback=30, horizon=1, scenario="univariate", target_representation="price_level")
+
+    cp_path = tmp_path / "test_checkpoint.pt"
+    model = LSTMForecaster(hidden_dim=16, num_layers=1, epochs=3, batch_size=16, random_state=42)
+    model.fit(train_batch, val_batch=val_batch, checkpoint_path=cp_path)
+    orig_preds = model.predict_prices(test_batch)
+
+    # Instantiate fresh model without fit and load checkpoint
+    loaded_model = LSTMForecaster(hidden_dim=16, num_layers=1)
+    loaded_model.load_checkpoint(cp_path)
+
+    # Scaler must be restored and fitted
+    assert loaded_model.scaler is not None
+    assert loaded_model.scaler.is_fitted_
+
+    loaded_preds = loaded_model.predict_prices(test_batch)
+    np.testing.assert_allclose(orig_preds, loaded_preds, rtol=1e-5)
+
+
