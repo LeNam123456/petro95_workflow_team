@@ -8,3 +8,23 @@ xgboost:
   early_stopping_rounds: 15
   random_state: 42
   eval_metric: "rmse"
+
+lstm:
+  hidden_dim: 64
+  num_layers: 2
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 15
+  random_state: 42
+
+gru:
+  hidden_dim: 64
+  num_layers: 2
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 15
+  random_state: 42

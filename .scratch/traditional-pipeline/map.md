@@ -19,6 +19,6 @@ Tracker Directory: `.scratch/traditional-pipeline/issues/`
 ## Tickets & Frontier
 - [x] [01-naive-baseline-and-walking-skeleton.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/01-naive-baseline-and-walking-skeleton.md) — Blocked by: None (Completed)
 - [x] [02-xgboost-relative-change-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/02-xgboost-relative-change-benchmark.md) — Blocked by: 01 (Completed)
-- [ ] [03-sequence-deep-learning-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/03-sequence-deep-learning-benchmark.md) — Blocked by: 01 *(Current Frontier)*
-- [ ] [04-price-level-ablation-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/04-price-level-ablation-benchmark.md) — Blocked by: 02, 03
+- [x] [03-sequence-deep-learning-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/03-sequence-deep-learning-benchmark.md) — Blocked by: 01 (Completed)
+- [ ] [04-price-level-ablation-benchmark.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/04-price-level-ablation-benchmark.md) — Blocked by: 02, 03 *(Current Frontier)*
 - [ ] [05-visualizations-manifest-and-audit.md](file:///d:/Petro_95/.scratch/traditional-pipeline/issues/05-visualizations-manifest-and-audit.md) — Blocked by: 04
